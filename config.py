@@ -15,7 +15,7 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 DB_PATH = os.getenv("DB_PATH", "/data/ai_quant_x.db")
 
-BINANCE_SPOT_BASE_URL = "https://api.binance.com"
+BINANCE_SPOT_BASE_URL = "https://data-api.binance.vision"
 BINANCE_FUTURES_BASE_URL = "https://fapi.binance.com"
 SPOT_EXCHANGE_INFO_PATH = "/api/v3/exchangeInfo"
 FUTURES_EXCHANGE_INFO_PATH = "/fapi/v1/exchangeInfo"
