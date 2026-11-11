@@ -26,9 +26,15 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
+# --- القائمة النخبة: أفضل 30 عملة من حيث السيولة والثقل ---
+# (تم اختيارها بعناية لتجنب التلاعب وضمان احترام المؤشرات الفنية)
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
-    "SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT"
+    "SYMBOLS", 
+    "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
+    "MATICUSDT,TONUSDT,SHIBUSDT,LTCUSDT,BCHUSDT,UNIUSDT,NEARUSDT,APTUSDT,ICPUSDT,SUIUSDT,"
+    "ARBUSDT,OPUSDT,INJUSDT,ATOMUSDT,FILUSDT,STXUSDT,IMXUSDT,RNDRUSDT,FETUSDT,WLDUSDT"
 ).split(",") if s.strip())
+
 MARKET_SOURCES = ("spot", "futures")
 DIRECTION_SYMBOLS = ("BTCUSDT", "ETHUSDT")
 TIMEFRAMES = ("15m", "1h", "4h")
@@ -36,15 +42,15 @@ PRIMARY_TIMEFRAME = "1h"
 KLINE_LIMIT = 200
 MIN_CANDLES_REQUIRED = 60
 MIN_24H_VOLUME_USDT = float(os.getenv("MIN_24H_VOLUME_USDT", "5000000"))
-MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "70")) # <--- تم الزيادة إلى 30 لزيادة الفرص
+MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "30"))
 EXCLUDED_SYMBOLS = set()
 EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
-MAX_OPEN_POSITIONS = 3
-MIN_SIGNAL_SCORE = 50 # <--- تم التخفيض من 65 ليتناسب مع الفلاتر الجديدة
+MAX_OPEN_POSITIONS = 3  # يمكنك زيادتها إلى 5 إذا أردت فتح صفقات أكثر في نفس الوقت
+MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
@@ -75,11 +81,11 @@ BACKTEST_INTERVAL = "1h"
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = 1.0
+RISK_PER_TRADE_PCT = 1.0     # <--- مخاطرة 1% (2 دولار في الصفقة)
 MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 30.0
+MAX_ALLOCATION_PCT = 30.0    # <--- سقف الصفقة 30% (60 دولار) لتحقيق أرباح ملموسة
 DAILY_LOSS_LIMIT_PCT = 3.0
-FEE_RATE = 0.0004 # <--- عمولة فيوتشرز بينانس
+FEE_RATE = 0.0004            # <--- عمولة بينانس فيوتشرز
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
 REWARD_RISK_RATIO = 2.0
@@ -106,13 +112,13 @@ MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
 
 # --- Trading Sessions (UTC) ---
-USE_SESSION_FILTER = False # <--- مغلق مؤقتاً
+USE_SESSION_FILTER = False
 LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
 # --- Scale-Out (Partial Profit Taking Phase 3) ---
-SCALE_OUT_ENABLED = False # <--- مغلق مؤقتاً
+SCALE_OUT_ENABLED = False
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
