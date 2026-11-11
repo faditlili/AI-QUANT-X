@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
-from backtest import fetch_history, run_backtest, format_report
+from backtest import run_backtest, format_report  # <--- تم حذف fetch_history من هنا
 import config
 
 router=APIRouter()
@@ -37,7 +37,6 @@ async def dashboard():
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
   <div class="max-w-md mx-auto px-4 pt-6">
-    <!-- Header -->
     <header class="flex justify-between items-center mb-6">
       <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
       <div class="flex gap-2">
@@ -46,7 +45,6 @@ async def dashboard():
       </div>
     </header>
 
-    <!-- Balance -->
     <section class="text-center mb-8">
       <p class="text-slate-400 text-xs uppercase tracking-widest mb-1 font-mono">Total Estimated Value (USDT)</p>
       <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
@@ -56,7 +54,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Chart -->
     <section class="glass rounded-2xl p-4 mb-6 scanline shadow-[0_0_20px_rgba(0,0,0,0.5)]">
       <div class="flex justify-between items-center mb-2">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
@@ -65,7 +62,6 @@ async def dashboard():
       <div class="h-48 w-full relative"><canvas id="equityChart"></canvas></div>
     </section>
 
-    <!-- Stats -->
     <section class="grid grid-cols-2 gap-3 mb-6">
       <div class="glass rounded-xl p-3 scanline">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
@@ -77,7 +73,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Active Positions -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
@@ -87,7 +82,6 @@ async def dashboard():
     </section>
   </div>
 
-  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="glass w-full max-w-md rounded-2xl p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
@@ -143,7 +137,7 @@ async function runBacktest() {
     const btn = document.getElementById('bt-run-btn');
     const resDiv = document.getElementById('bt-results');
     
-    btn.innerHTML = 'Running... (Please wait)';
+    btn.innerHTML = 'Running...';
     btn.disabled = true;
     resDiv.classList.add('hidden');
     
@@ -163,12 +157,9 @@ async function runBacktest() {
 
 async function load(){
  try{
-  // استخدام allSettled لضمان عدم انهيار الواجهة إذا فشل أحد الطلبات
   const results = await Promise.allSettled([
-      fetch('/api/portfolio').then(y=>y.json()), 
-      fetch('/api/risk').then(y=>y.json()),
-      fetch('/api/positions').then(y=>y.json()), 
-      fetch('/api/performance').then(y=>y.json()),
+      fetch('/api/portfolio').then(y=>y.json()), fetch('/api/risk').then(y=>y.json()),
+      fetch('/api/positions').then(y=>y.json()), fetch('/api/performance').then(y=>y.json()),
       fetch('/api/status').then(y=>y.json())
   ]);
   
@@ -179,7 +170,6 @@ async function load(){
   const status = results[4].status === 'fulfilled' ? results[4].value : {paused: false};
 
   updatePauseButton(status.paused);
-  
   document.getElementById('total-equity').textContent = fmt(p.equity);
   
   const pnlVal = p.unrealized_pnl + p.realized_pnl;
@@ -212,7 +202,6 @@ async function load(){
     `).join('');
   }
 
-  // Chart
   if(!chartInstance) {
     const ctx = document.getElementById('equityChart').getContext('2d');
     let gradient = ctx.createLinearGradient(0, 0, 0, 200);
@@ -232,7 +221,6 @@ async function load(){
   }
  }catch(e){ console.error('System Error:', e); }
 }
-
 load(); setInterval(load, 3000);
 </script>
 </body>
@@ -269,24 +257,19 @@ async def close_position(request:Request, pos_id: int):
         return {"success": True}
     except Exception as e: return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
-# --- Interactive Backtest Endpoint ---
 @router.post("/api/run_backtest")
 async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: str = "all"):
     try:
         engine = request.app.state.engine
         market = engine.market
         
-        # جلب البيانات التاريخية
-        df = await fetch_history(market, symbol, "1h", "futures", 1000)
+        # --- تم التعديل هنا لاستخدام market.fetch_history بدلاً من الدالة المحذوفة ---
+        df = await market.fetch_history(symbol, "1h", "futures", 1000)
+        
         if df.empty: return {"success": False, "error": "Failed to fetch history"}
-        
-        # تحديد الاستراتيجيات
         strategies = None if strategy == "all" else [strategy]
-        
-        # تشغيل الباكتيست في الخلفية (لتجنب تجميد السيرفر)
         report = await asyncio.to_thread(run_backtest, df, strategies, "futures")
         report_text = format_report(symbol, report, "1h")
-        
         return {"success": True, "report": report_text}
     except Exception as e:
         return {"success": False, "error": str(e)}
