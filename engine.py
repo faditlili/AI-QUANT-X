@@ -57,9 +57,12 @@ class Engine:
         dirs=[direction(frames[x]) for x in config.TIMEFRAMES]
         primary=frames[config.PRIMARY_TIMEFRAME]
         news=await self.news.get_news_risk(symbol)
+        
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
+        
         ctx={"source":source,"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
-        "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate}
+             "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate}
+             
         result=select_signal(ctx)
         self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
         if self.paused or result["action"]=="HOLD":
@@ -76,7 +79,6 @@ class Engine:
                 await self.notifier.notify_trade_opened(opened["position"])
 
     async def monitor_positions(self):
-        """Fast loop: stops/targets/trailing are checked far more often than the full scan."""
         sources={p["source"] for p in self.db.get_open_positions()}
         for source in sources:
             prices=await self.market.get_last_prices(source)
