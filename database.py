@@ -59,7 +59,8 @@ class Database:
         cols={r["name"] for r in self.conn.execute("PRAGMA table_info(positions)").fetchall()}
         if "strategy" not in cols: self.conn.execute("ALTER TABLE positions ADD COLUMN strategy TEXT")
         if "initial_stop" not in cols: self.conn.execute("ALTER TABLE positions ADD COLUMN initial_stop REAL")
-        if "initial_quantity" not in cols: self.conn.execute("ALTER TABLE positions ADD COLUMN initial_quantity REAL") # <--- جديد
+        if "initial_quantity" not in cols: self.conn.execute("ALTER TABLE positions ADD COLUMN initial_quantity REAL")
+        if "partial_pnl" not in cols: self.conn.execute("ALTER TABLE positions ADD COLUMN partial_pnl REAL DEFAULT 0")
         self.conn.commit()
 
     def get_state(self,key,default=None):
@@ -71,6 +72,23 @@ class Database:
         with self.lock:
             self.conn.execute("INSERT INTO state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(key,str(value)))
             self.conn.commit()
+
+    def refresh_daily_baseline(self):
+        today=datetime.now(timezone.utc).date().isoformat()
+        if self.get_state("daily_baseline_date")!=today:
+            self.set_state("daily_baseline",self.get_portfolio()["equity"])
+            self.set_state("daily_baseline_date",today)
+        return float(self.get_state("daily_baseline",config.INITIAL_BALANCE))
+
+    def get_peak_equity(self):
+        eq=self.get_portfolio()["equity"]
+        peak=max(float(self.get_state("peak_equity",eq)),eq)
+        self.set_state("peak_equity",peak)
+        return peak
+
+    def reset_peak(self,equity=None):
+        eq=self.get_portfolio()["equity"] if equity is None else equity
+        self.set_state("peak_equity",eq)
 
     def get_portfolio(self):
         with self.lock:
@@ -143,34 +161,30 @@ class Database:
         self.set_state(f"mark:{pid}",price)
 
     def partial_close(self, pid, exit_price, close_qty, reason, fee):
-        """إغلاق جزء من الصفقة وتحديث الكمية المتبقية"""
         with self.lock:
             self.conn.execute("BEGIN IMMEDIATE")
             try:
                 row=self.conn.execute("SELECT * FROM positions WHERE id=? AND status='OPEN'",(pid,)).fetchone()
-                if not row: return None
-                
+                if not row or close_qty<=0 or close_qty>=row["quantity"]:
+                    self.conn.rollback(); return None
                 sign=1 if row["side"]=="LONG" else -1
+                frac=close_qty/row["quantity"]
                 gross=(exit_price-row["entry_price"])*close_qty*sign
-                net=gross-fee
-                
-                # تحديث الرصيد النقدي والربح المحقق
+                open_fee_part=row["opening_fee"]*frac
+                net=gross-fee-open_fee_part
                 cash=float(self.get_state("cash_balance",config.INITIAL_BALANCE))
-                # نعيد له المارجن المحجوز لهذا الجزء + الربح
-                margin_portion = (close_qty / row["quantity"]) * row["margin_used"]
-                cash += margin_portion + gross - fee
-                self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('cash_balance',?)",(str(cash),))
+                margin_part=frac*row["margin_used"]
+                cash+=margin_part+gross-fee
                 realized=float(self.get_state("realized_pnl",0))+net
+                self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('cash_balance',?)",(str(cash),))
                 self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('realized_pnl',?)",(str(realized),))
-                
-                # تحديث الصفقة المتبقية
-                new_qty = row["quantity"] - close_qty
-                new_margin = row["margin_used"] - margin_portion
-                new_risk = (new_qty / row["quantity"]) * row["risk_amount"]
-                
-                self.conn.execute("""UPDATE positions SET quantity=?, margin_used=?, risk_amount=?, metadata=? WHERE id=?""",
-                                  (new_qty, new_margin, new_risk, json.dumps({"partial_close_reason": reason}), pid))
-                
+                try: meta=json.loads(row["metadata"] or "{}")
+                except Exception: meta={}
+                meta["partial_close_reason"]=reason
+                self.conn.execute("""UPDATE positions SET quantity=?, margin_used=?, risk_amount=?,
+                    opening_fee=?, partial_pnl=COALESCE(partial_pnl,0)+?, metadata=? WHERE id=?""",
+                    (row["quantity"]-close_qty, row["margin_used"]-margin_part, row["risk_amount"]*(1-frac),
+                     row["opening_fee"]-open_fee_part, net, json.dumps(meta), pid))
                 self.conn.commit()
                 return self.get_position(pid)
             except Exception:
@@ -182,23 +196,31 @@ class Database:
             self.conn.execute("BEGIN IMMEDIATE")
             try:
                 row=self.conn.execute("SELECT * FROM positions WHERE id=? AND status='OPEN'",(pid,)).fetchone()
-                if not row: return None
+                if not row:
+                    self.conn.rollback(); return None
                 sign=1 if row["side"]=="LONG" else -1
                 gross=(exit_price-row["entry_price"])*row["quantity"]*sign
-                net=gross-row["opening_fee"]-closing_fee
+                net_rest=gross-row["opening_fee"]-closing_fee
+                net_total=net_rest+float(row["partial_pnl"] or 0)
                 cash=float(self.get_state("cash_balance",self.get_state("initial_balance",config.INITIAL_BALANCE)))
-                cash += row["margin_used"]+gross-closing_fee
+                cash+=row["margin_used"]+gross-closing_fee
                 self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('cash_balance',?)",(str(cash),))
-                realized=float(self.get_state("realized_pnl",0))+net
+                realized=float(self.get_state("realized_pnl",0))+net_rest
                 self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('realized_pnl',?)",(str(realized),))
                 self.conn.execute("""UPDATE positions SET status='CLOSED',closed_at=?,exit_price=?,gross_pnl=?,net_pnl=?,closing_fee=?,exit_reason=? WHERE id=?""",
-                  (utc_now(),exit_price,gross,net,closing_fee,reason,pid))
+                  (utc_now(),exit_price,gross,net_total,closing_fee,reason,pid))
                 self.conn.execute("DELETE FROM state WHERE key=?",(f"mark:{pid}",))
                 self.conn.commit()
                 return self.get_position(pid)
             except Exception:
                 self.conn.rollback()
                 raise
+
+    def prune(self,decisions_keep=5000,snapshots_keep=20000):
+        with self.lock:
+            self.conn.execute("DELETE FROM decisions WHERE id NOT IN (SELECT id FROM decisions ORDER BY id DESC LIMIT ?)",(decisions_keep,))
+            self.conn.execute("DELETE FROM equity_snapshots WHERE id NOT IN (SELECT id FROM equity_snapshots ORDER BY id DESC LIMIT ?)",(snapshots_keep,))
+            self.conn.commit()
 
     def add_decision(self,symbol,source,action,score,reason):
         with self.lock:
