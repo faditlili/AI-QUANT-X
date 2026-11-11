@@ -1,8 +1,4 @@
-"""Technical indicators (vectorised) with input validation.
-
-compute_frame() returns the whole indicator table once (used by the backtester),
-calculate_indicators() returns the latest row as a dict (used by the live engine).
-"""
+"""Technical indicators (vectorised) with input validation."""
 import numpy as np
 import pandas as pd
 import config
@@ -36,6 +32,7 @@ def _pctile_of_last(window):
 def compute_frame(frame):
     df = _clean(frame)
     close, high, low = df.close, df.high, df.low
+    
     df["ema9"] = close.ewm(span=config.EMA_FAST, adjust=False).mean()
     df["ema21"] = close.ewm(span=config.EMA_MEDIUM, adjust=False).mean()
     df["ema50"] = close.ewm(span=config.EMA_SLOW, adjust=False).mean()
@@ -68,7 +65,6 @@ def compute_frame(frame):
     df["volume_sma"] = vol_sma.fillna(0.0)
     df["volume_ratio"] = (df.volume / vol_sma.where(vol_sma > 0)).fillna(0.0)
 
-    # Bollinger bands / z-score (mean reversion)
     mid = close.rolling(20).mean()
     sd = close.rolling(20).std(ddof=0)
     df["bb_mid"] = mid
@@ -79,28 +75,33 @@ def compute_frame(frame):
     df["bb_width"] = width
     df["bb_width_pctile"] = width.rolling(100, min_periods=30).apply(_pctile_of_last, raw=True).fillna(50.0)
 
-    # Donchian channel of the previous 20 candles (excludes the current one) and squeeze flag
     df["donchian_high"] = high.rolling(20).max().shift(1).fillna(high)
     df["donchian_low"] = low.rolling(20).min().shift(1).fillna(low)
     df["squeeze"] = (df.bb_width_pctile.rolling(10, min_periods=1).min() <= 25).astype(int)
 
-    # Volatility regime: percentile of ATR relative to price
     atr_pct = atr / close
     df["atr_pctile"] = atr_pct.rolling(100, min_periods=30).apply(_pctile_of_last, raw=True).fillna(50.0)
 
-    # VWAP Calculation
+    # VWAP
     typical_price = (high + low + close) / 3
     df["vwap"] = (typical_price * df.volume).cumsum() / df.volume.cumsum()
+
+    # Order Flow (Taker Buy Ratio)
+    df["taker_buy_ratio"] = (df.get("taker_buy_volume", df.volume * 0.5) / df.volume.replace(0, 1)).fillna(0.5)
+
+    # Market Structure (Swing Highs / Lows)
+    df["swing_high"] = high.rolling(10).max().shift(1).fillna(high)
+    df["swing_low"] = low.rolling(10).min().shift(1).fillna(low)
+
     return df
 
 _KEYS = ("ema9","ema21","ema50","rsi","atr","adx","plus_di","minus_di","volume_sma","volume_ratio",
          "bb_mid","bb_upper","bb_lower","zscore","bb_width","bb_width_pctile",
-         "donchian_high","donchian_low","atr_pctile","vwap")
+         "donchian_high","donchian_low","atr_pctile", "vwap", "taker_buy_ratio", "swing_high", "swing_low")
 
 def snapshot(df, i=-1):
-    """Indicator values at row i as a plain dict."""
     r = df.iloc[i]
-    out = {k: float(r[k]) for k in _KEYS}
+    out = {k: float(r[k]) for k in _KEYS if k in r}
     price = float(r["close"])
     out.update({
         "price": price, "close": price,
@@ -114,13 +115,12 @@ def snapshot(df, i=-1):
 def calculate_indicators(frame):
     df = compute_frame(frame)
     result = snapshot(df)
-    if not all(np.isfinite(v) for v in result.values()):
+    if not all(np.isfinite(v) for v in result.values() if isinstance(v, (int, float))):
         raise IndicatorError("Non-finite indicator result")
     return result
 
 def direction(ind):
-    if not ind:
-        return "NEUTRAL"
+    if not ind: return "NEUTRAL"
     if ind["ema9"] > ind["ema21"] > ind["ema50"] and ind["plus_di"] >= ind["minus_di"]:
         return "BULLISH"
     if ind["ema9"] < ind["ema21"] < ind["ema50"] and ind["minus_di"] > ind["plus_di"]:
