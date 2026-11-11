@@ -253,7 +253,7 @@ async function load(){
            <div><p class="text-[10px] text-slate-500 uppercase">Target</p><p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p></div>
            <div class="text-right"><p class="text-[10px] text-slate-500 uppercase">Stop</p><p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p></div>
         </div>
-        <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="absolute top-2 right-2 text-[10px] font-bold text-neon-red border border-neon-red/30 px-2 py-1 rounded hover:bg-neon-red/10 active:scale-95 transition-all">CLOSE</button>
+        <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="absolute bottom-2 right-2 text-[10px] font-bold text-neon-red border border-neon-red/30 px-2 py-1 rounded hover:bg-neon-red/10 active:scale-95 transition-all">CLOSE</button>
       </div>
     `).join('');
   }
