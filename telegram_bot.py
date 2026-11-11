@@ -15,15 +15,25 @@ class TelegramNotifier:
             log.info("Telegram disabled (missing token/admin id)."); return
         try:
             self.app=Application.builder().token(config.TELEGRAM_TOKEN).build()
-            self.app.add_handler(CommandHandler("status",self.cmd_status))
-            self.app.add_handler(CommandHandler("positions",self.cmd_positions))
-            self.app.add_handler(CommandHandler("pause",self.cmd_pause))
-            self.app.add_handler(CommandHandler("resume",self.cmd_resume))
-            self.app.add_handler(CallbackQueryHandler(self.handle_callback)) # <--- جديد
-            await self.app.initialize(); await self.app.start(); await self.app.updater.start_polling()
+            self.app.add_handler(CommandHandler("start", self.cmd_start))
+            self.app.add_handler(CommandHandler("status", self.cmd_status))
+            self.app.add_handler(CommandHandler("positions", self.cmd_positions))
+            self.app.add_handler(CommandHandler("pause", self.cmd_pause))
+            self.app.add_handler(CommandHandler("resume", self.cmd_resume))
+            self.app.add_handler(CommandHandler("performance", self.cmd_performance))
+            self.app.add_handler(CommandHandler("balance", self.cmd_balance))
+            self.app.add_handler(CommandHandler("risk", self.cmd_risk))          # <--- جديد
+            self.app.add_handler(CommandHandler("history", self.cmd_history))    # <--- جديد
+            self.app.add_handler(CallbackQueryHandler(self.handle_callback)) 
+            
+            await self.app.initialize()
+            await self.app.start()
+            await self.app.updater.start_polling()
             self.enabled=True
+            log.info("Telegram Bot Started Successfully!")
         except Exception as e:
-            log.exception("Telegram startup failed"); self.enabled=False
+            log.exception(f"Telegram startup failed: {e}")
+            self.enabled=False
 
     def _authorized(self,update):
         user=update.effective_user
@@ -32,13 +42,85 @@ class TelegramNotifier:
     async def _guard(self,update):
         if not self._authorized(update):
             if update.effective_message:
-                await update.effective_message.reply_text("غير مصرح.")
+                await update.effective_message.reply_text("غير مصرح لك باستخدام هذا البوت.")
             elif update.callback_query:
                 await update.callback_query.answer("غير مصرح.", show_alert=True)
             return False
         return True
 
-    # --- Callback Handler (للأزرار) ---
+    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self._guard(update): return
+        keyboard = [[InlineKeyboardButton("إيقاف/تشغيل البوت", callback_data="toggle_pause")]]
+        await update.effective_message.reply_text(
+            "أهلاً بك في AI QUANT X 🤖\nالبوت يعمل الآن في وضع المحاكاة.\nاستخدم الأزرار أدناه أو الأوامر للتحكم:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    async def cmd_status(self,update,context):
+        if not await self._guard(update): return
+        p=self.db.get_portfolio()
+        status = "متوقف ⏸" if self.engine.paused else "يعمل ▶️"
+        keyboard = [[InlineKeyboardButton("إيقاف/تشغيل البوت", callback_data="toggle_pause")]]
+        await update.effective_message.reply_text(
+            f"حالة البوت: {status}\nالرصيد: {p['equity']:.2f} USDT\nالصفقات المفتوحة: {p['open_count']}\nالأرباح المحققة: {p['realized_pnl']:.2f} USDT",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    async def cmd_balance(self,update,context):
+        if not await self._guard(update): return
+        p=self.db.get_portfolio()
+        await update.effective_message.reply_text(f"الرصيد النقدي: {p['cash_balance']:.2f}\nالربح العائم: {p['unrealized_pnl']:+.2f}\nالربح المحقق: {p['realized_pnl']:+.2f}")
+
+    async def cmd_performance(self,update,context):
+        if not await self._guard(update): return
+        p=self.db.get_performance()
+        pf = p['profit_factor']
+        pf_text = "n/a" if pf is None else f"{pf:.2f}"
+        await update.effective_message.reply_text(f"إجمالي الصفقات: {p['total_trades']}\nنسبة النجاح: {p['win_rate']:.1f}%\nمعامل الربح: {pf_text}\nصافي الربح: {p['net_pnl']:.2f} USDT")
+
+    async def cmd_risk(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self._guard(update): return
+        r = self.engine.risk.get_risk_status()
+        await update.effective_message.reply_text(
+            f"🛡️ تقرير المخاطر:\n"
+            f"الرصيد الحالي: {r['equity']:.2f}\n"
+            f"المخاطرة المفتوحة: {r['open_risk']:.2f} / {r['risk_cap']:.2f}\n"
+            f"تغير اليوم: {r['daily_change']:+.2f}\n"
+            f"حد الخسارة اليومي: {r['daily_loss_limit']:.2f}"
+        )
+
+    async def cmd_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self._guard(update): return
+        trades = self.db.get_recent_trades(5)
+        closed_trades = [t for t in trades if t["status"] == "CLOSED"]
+        if not closed_trades:
+            await update.effective_message.reply_text("لا توجد صفقات مغلقة مؤخراً.")
+            return
+        msg = "📜 آخر 5 صفقات مغلقة:\n\n"
+        for t in closed_trades:
+            emoji = "🟢" if float(t['net_pnl']) > 0 else "🔴"
+            msg += f"{emoji} {t['symbol']} | {t['side']}\n"
+            msg += f"PnL: {float(t['net_pnl']):+.2f} USDT ({t['exit_reason']})\n\n"
+        await update.effective_message.reply_text(msg)
+
+    async def cmd_positions(self,update,context):
+        if not await self._guard(update): return
+        rows=self.db.get_open_positions()
+        if not rows:
+            await update.effective_message.reply_text("لا توجد صفقات مفتوحة حالياً."); return
+        for x in rows:
+            text = f"{x['source']} {x['symbol']} {x['side']}\nالكمية: {x['quantity']:.4g}\nالدخول: {x['entry_price']:.4f}"
+            keyboard = [[InlineKeyboardButton(f"إغلاق {x['symbol']}", callback_data=f"close_{x['id']}")]]
+            await update.effective_message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    async def cmd_pause(self,update,context):
+        if not await self._guard(update): return
+        self.engine.set_paused(True); await update.effective_message.reply_text("تم إيقاف فتح صفقات جديدة.")
+
+    async def cmd_resume(self,update,context):
+        if not await self._guard(update): return
+        self.engine.set_paused(False); await update.effective_message.reply_text("تم استئناف عمل البوت.")
+
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self._guard(update): return
         query = update.callback_query
@@ -54,58 +136,32 @@ class TelegramNotifier:
             pos_id = int(data.split("_")[1])
             pos = self.db.get_position(pos_id)
             if pos and pos["status"] == "OPEN":
-                prices = await self.engine.market.get_last_prices(pos["source"])
-                if pos["symbol"] in prices:
-                    price = prices[pos["symbol"]]["last_price"]
-                    closed = self.engine.trader.close_position(pos["id"], price, "MANUAL_TELEGRAM")
-                    if closed:
-                        await query.edit_message_text(f"✅ تم إغلاق {closed['symbol']} يدوياً. الربح: {float(closed['net_pnl']):+.2f} USDT")
-
-    async def cmd_status(self,update,context):
-        if not await self._guard(update): return
-        p=self.db.get_portfolio()
-        status = "متوقف ⏸" if self.engine.paused else "يعمل ▶️"
-        keyboard = [[InlineKeyboardButton("إيقاف/تشغيل البوت", callback_data="toggle_pause")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.effective_message.reply_text(
-            f"حالة البوت: {status}\nEquity: {p['equity']:.2f}\nOpen: {p['open_count']}\nRealized PnL: {p['realized_pnl']:.2f}",
-            reply_markup=reply_markup
-        )
-
-    async def cmd_positions(self,update,context):
-        if not await self._guard(update): return
-        rows=self.db.get_open_positions()
-        if not rows:
-            await update.effective_message.reply_text("لا توجد صفقات مفتوحة."); return
-        for x in rows:
-            text = f"{x['source']} {x['symbol']} {x['side']} qty={x['quantity']:.4g}\nEntry: {x['entry_price']:.4f}"
-            keyboard = [[InlineKeyboardButton(f"إغلاق {x['symbol']}", callback_data=f"close_{x['id']}")]]
-            await update.effective_message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    async def cmd_pause(self,update,context):
-        if not await self._guard(update): return
-        self.engine.set_paused(True); await update.effective_message.reply_text("تم إيقاف البوت.")
-
-    async def cmd_resume(self,update,context):
-        if not await self._guard(update): return
-        self.engine.set_paused(False); await update.effective_message.reply_text("تم تشغيل البوت.")
+                try:
+                    prices = await self.engine.market.get_last_prices(pos["source"])
+                    if pos["symbol"] in prices:
+                        price = prices[pos["symbol"]]["last_price"]
+                        closed = self.engine.trader.close_position(pos["id"], price, "MANUAL_TELEGRAM")
+                        if closed:
+                            await query.edit_message_text(f"✅ تم إغلاق {closed['symbol']} يدوياً.\nالربح: {float(closed['net_pnl']):+.2f} USDT")
+                except Exception as e:
+                    await query.edit_message_text(f"خطأ في الإغلاق: {e}")
 
     async def send(self,message, reply_markup=None):
         if not self.enabled or not config.TELEGRAM_CHAT_ID: return False
         try:
             await self.app.bot.send_message(chat_id=config.TELEGRAM_CHAT_ID, text=message, reply_markup=reply_markup)
             return True
-        except Exception: return False
+        except Exception as e: 
+            log.error(f"Telegram send error: {e}")
+            return False
 
     async def notify_trade_opened(self, position):
         keyboard = [[InlineKeyboardButton("❌ إغلاق الصفقة", callback_data=f"close_{position['id']}")]]
-        text = (f"🟢 PAPER POSITION OPENED\n{position['source']} | {position['symbol']} | {position['side']}\n"
-                f"Entry: {position['entry_price']:.4g} | Risk: {position['risk_amount']:.2f}")
+        text = (f"🟢 تم فتح صفقة جديدة\n{position['source']} | {position['symbol']} | {position['side']}\nسعر الدخول: {position['entry_price']:.4g}\nالمخاطرة: {position['risk_amount']:.2f} USDT")
         return await self.send(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     async def notify_trade_closed(self, position):
-        text = (f"🔴 POSITION CLOSED\n{position['source']} | {position['symbol']} | {position['side']}\n"
-                f"Exit: {float(position['exit_price']):.4g}\nNet PnL: {float(position['net_pnl']):+.4f} USDT\nReason: {position.get('exit_reason')}")
+        text = (f"🔴 تم إغلاق صفقة\n{position['source']} | {position['symbol']} | {position['side']}\nسعر الخروج: {float(position['exit_price']):.4g}\nصافي الربح: {float(position['net_pnl']):+.4f} USDT\nالسبب: {position.get('exit_reason')}")
         return await self.send(text)
 
     async def close(self):
