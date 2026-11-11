@@ -100,7 +100,7 @@ HTTP_RETRY_ATTEMPTS = 2
 USER_AGENT = "AI-QUANT-X-Paper/4.1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# --- Advanced Filters (Arsenal Phase 1 & 2) ---
+# --- Advanced Filters (Arsenal Phase 1) ---
 USE_FUNDING_RATE_FILTER = True
 MAX_LONG_FUNDING_RATE = 0.0001
 MIN_SHORT_FUNDING_RATE = -0.0001
@@ -109,6 +109,11 @@ USE_SESSION_FILTER = True
 LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
+
+# --- Scale-Out (Partial Profit Taking Phase 3) ---
+SCALE_OUT_ENABLED = True
+SCALE_OUT_R = 1.0      # إغلاق جزء من الصفقة عند ربح 1R
+SCALE_OUT_PCT = 0.5    # إغلاق 50% من حجم الصفقة
 
 def validate_config():
     if not PAPER_MODE:
