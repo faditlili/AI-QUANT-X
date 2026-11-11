@@ -36,7 +36,7 @@ PRIMARY_TIMEFRAME = "1h"
 KLINE_LIMIT = 200
 MIN_CANDLES_REQUIRED = 60
 MIN_24H_VOLUME_USDT = float(os.getenv("MIN_24H_VOLUME_USDT", "5000000"))
-MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "30")) # <--- تم الزيادة إلى 30 لزيادة الفرص
+MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "70")) # <--- تم الزيادة إلى 30 لزيادة الفرص
 EXCLUDED_SYMBOLS = set()
 EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
