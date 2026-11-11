@@ -41,16 +41,17 @@ class MarketData:
     def _path(self, source, kind):
         paths = {
             "spot": {
-                
                 "klines": config.SPOT_KLINES_PATH,
                 "ticker": config.SPOT_TICKER_24H_PATH,
                 "info": config.SPOT_EXCHANGE_INFO_PATH,
-                "price": config.SPOT_PRICE_PATH, },
+                "price": config.SPOT_PRICE_PATH, 
+            },
             "futures": {              
                 "klines": config.FUTURES_KLINES_PATH,
                 "ticker": config.FUTURES_TICKER_24H_PATH,
                 "info": config.FUTURES_EXCHANGE_INFO_PATH,
-                "price": config.SPOT_PRICE_PATH, },
+                "price": config.SPOT_PRICE_PATH, # تأكد من أن هذا المسار صحيح للفيوتشرز
+            },
         }
         return paths[source][kind]
 
@@ -124,13 +125,14 @@ class MarketData:
         return frame
         
     async def get_last_prices(self, source="futures"):
-        """Lightweight last-price snapshot for fast position monitoring.""")
+        """Lightweight last-price snapshot for fast position monitoring."""
         raw = await self._get(source, self._path(source, "price"))
         if isinstance(raw, dict):
-            raw = [raw])
+            raw = [raw]
         return {
             x["symbol"]: {"last_price": float(x["price"])}
-            for x in raw if x.get("symbol") and x.get("price")}
+            for x in raw if x.get("symbol") and x.get("price")
+        }
         
     async def get_tickers_24h(self, source="futures"):
         raw = await self._get(source, self._path(source, "ticker"))
