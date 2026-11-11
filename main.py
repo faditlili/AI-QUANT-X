@@ -1,4 +1,4 @@
-import logging
+import hmac, logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -31,6 +31,20 @@ async def lifespan(app:FastAPI):
 
 app=FastAPI(title=config.APP_NAME,version=config.APP_VERSION,lifespan=lifespan)
 app.include_router(router)
+
+@app.middleware("http")
+async def dashboard_key_guard(request: Request, call_next):
+    key=config.DASHBOARD_KEY
+    if not key or request.url.path=="/health":
+        return await call_next(request)
+    supplied=request.query_params.get("key") or request.cookies.get("dash_key") or ""
+    if not hmac.compare_digest(supplied.encode(),key.encode()):
+        return JSONResponse({"detail":"unauthorized"},status_code=401)
+    response=await call_next(request)
+    if request.query_params.get("key"):
+        response.set_cookie("dash_key",key,httponly=True,samesite="lax",max_age=30*86400,
+                            secure=request.headers.get("x-forwarded-proto")=="https")
+    return response
 
 @app.get("/health")
 async def health(request: Request):
