@@ -58,10 +58,9 @@ class PaperTrader:
                         slip = config.SLIPPAGE_BPS / 10000
                         exit_price = price * (1 - slip if pos["side"] == "LONG" else 1 + slip)
                         fee = exit_price * close_qty * config.FEE_RATE
-                        # إغلاق جزئي
-                        pos = self.db.partial_close(pos["id"], exit_price, close_qty, f"SCALE_OUT_{config.SCALE_OUT_R}R", fee)
-                        if pos:
-                            # نقل الوقف لنقطة الدخول (Break-even)
+                        updated = self.db.partial_close(pos["id"], exit_price, close_qty, f"SCALE_OUT_{config.SCALE_OUT_R}R", fee)
+                        if updated:
+                            pos = updated
                             be_price = pos["entry_price"] * (1 + sign * (2 * config.FEE_RATE + config.SLIPPAGE_BPS / 10000))
                             self.db.update_stop(pos["id"], be_price)
                             pos["stop_price"] = be_price
