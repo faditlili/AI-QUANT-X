@@ -21,10 +21,9 @@ def next_stop(side, entry, initial_stop, stop, price, trailing=None):
         be = entry * (1 + sign * (2 * config.FEE_RATE + config.SLIPPAGE_BPS / 10000))
         new = max(new, be) if sign == 1 else min(new, be)
         
-    # 2. Chandelier Exit (الوقف المتدلي)
+    # 2. Chandelier Exit (تم استخدام المتغير من الإعدادات)
     if gain_r >= config.TRAIL_START_R:
-        dynamic_multiplier = 3.0
-        trail = price - sign * r * dynamic_multiplier
+        trail = price - sign * r * config.TRAIL_DISTANCE_R
         new = max(new, trail) if sign == 1 else min(new, trail)
         
     return new
