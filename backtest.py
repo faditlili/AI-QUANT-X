@@ -1,10 +1,4 @@
-"""Backtest engine: same strategies, risk sizing and stop logic as the live paper bot.
-
-Realism rules: signals are computed on a closed candle and filled at the NEXT open;
-fees and slippage are charged; if stop and target are both inside one candle the stop
-is assumed to hit first; the higher-timeframe (4h) bias only uses fully closed candles.
-It trades one position at a time on a single symbol.
-"""
+"""Backtest engine with corrected Taker Volume fetching."""
 import numpy as np
 import pandas as pd
 import config
@@ -32,7 +26,6 @@ def _htf_directions(ind, ts, base_ms, htf_ms=4 * 3600000):
     bull = ((hind.ema9 > hind.ema21) & (hind.ema21 > hind.ema50) & (hind.plus_di >= hind.minus_di)).values
     bear = ((hind.ema9 < hind.ema21) & (hind.ema21 < hind.ema50) & (hind.minus_di > hind.plus_di)).values
     labels = np.where(bull, "BULLISH", np.where(bear, "BEARISH", "NEUTRAL"))
-    # newest fully closed higher-timeframe candle at the close of each base candle
     pos = np.searchsorted(hts, ts + base_ms - htf_ms, side="right") - 1
     return [labels[p] if p >= 0 else "NEUTRAL" for p in pos]
 
@@ -89,7 +82,6 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
         pos = None
 
     for i in range(warmup, n):
-        # 1) fill a pending signal at this candle's open
         if pending and pos is None:
             sign = 1 if pending["side"] == "LONG" else -1
             entry = op[i] * (1 + sign * slip)
@@ -109,34 +101,23 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
                            "regime": pending["regime"], "equity_at_entry": equity + entry_fee}
         pending = None
 
-        # 2) manage the open position inside this candle
         if pos:
             bars_in_trade += 1
             if pos["side"] == "LONG":
-                if op[i] <= pos["stop"]:
-                    close_pos(i, op[i] * (1 - slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
-                elif lo[i] <= pos["stop"]:
-                    close_pos(i, pos["stop"] * (1 - slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
-                elif op[i] >= pos["target"]:
-                    close_pos(i, op[i], "TAKE_PROFIT")
-                elif hi[i] >= pos["target"]:
-                    close_pos(i, pos["target"], "TAKE_PROFIT")
+                if op[i] <= pos["stop"]: close_pos(i, op[i] * (1 - slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
+                elif lo[i] <= pos["stop"]: close_pos(i, pos["stop"] * (1 - slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
+                elif op[i] >= pos["target"]: close_pos(i, op[i], "TAKE_PROFIT")
+                elif hi[i] >= pos["target"]: close_pos(i, pos["target"], "TAKE_PROFIT")
             else:
-                if op[i] >= pos["stop"]:
-                    close_pos(i, op[i] * (1 + slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
-                elif hi[i] >= pos["stop"]:
-                    close_pos(i, pos["stop"] * (1 + slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
-                elif op[i] <= pos["target"]:
-                    close_pos(i, op[i], "TAKE_PROFIT")
-                elif lo[i] <= pos["target"]:
-                    close_pos(i, pos["target"], "TAKE_PROFIT")
+                if op[i] >= pos["stop"]: close_pos(i, op[i] * (1 + slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
+                elif hi[i] >= pos["stop"]: close_pos(i, pos["stop"] * (1 + slip), "STOP_LOSS" if pos["stop"] == pos["initial_stop"] else "TRAILING_STOP")
+                elif op[i] <= pos["target"]: close_pos(i, op[i], "TAKE_PROFIT")
+                elif lo[i] <= pos["target"]: close_pos(i, pos["target"], "TAKE_PROFIT")
             if pos:
-                pos["stop"] = next_stop(pos["side"], pos["entry"], pos["initial_stop"],
-                                        pos["stop"], cl[i], trailing)
+                pos["stop"] = next_stop(pos["side"], pos["entry"], pos["initial_stop"], pos["stop"], cl[i], trailing)
             if pos and i == n - 1:
                 close_pos(i, cl[i], "END_OF_DATA")
 
-        # 3) mark to market, update protections
         unreal = 0.0
         if pos:
             sign = 1 if pos["side"] == "LONG" else -1
@@ -149,17 +130,14 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
         if dd_until >= 0 and i >= dd_until:
             peak, dd_until = mtm, -1
 
-        # 4) look for a new signal on the closed candle (filled next open)
         if pos is None and i < n - 1 and i >= blocked_until and dd_until < 0:
             if not np.isfinite(ind["atr"].values[i]) or ind["atr"].values[i] <= 0:
                 continue
             snap = snapshot(ind, i)
             d = direction(snap)
-            
-            # --- تعديل كلود: استخدام وقت الشمعة بدلاً من وقت السيرفر ---
             ctx = {"source": source, "primary": snap, "dirs": [d, htf[i]], "news_risk": 0.0,
-                   "hour_utc": int((ts[i] // 3600000) % 24)}
-            
+                   "hour_utc": int((ts[i] // 3600000) % 24),
+                   "fear_greed": 50, "breadth": 50.0, "funding_rate": 0.0} # قيم افتراضية للباكتيست
             sig = select_signal(ctx, strategies)
             if sig["action"] != "HOLD":
                 pending = {"side": sig["side"], "strategy": sig["strategy"], "regime": sig["regime"],
@@ -174,14 +152,12 @@ def _profit_factor(vals):
     return (gp / gl) if gl > 0 else (None if gp > 0 else 0.0)
 
 def _max_drawdown(curve):
-    if len(curve) == 0:
-        return 0.0
+    if len(curve) == 0: return 0.0
     peaks = np.maximum.accumulate(curve)
     return float(((peaks - curve) / peaks).max() * 100)
 
 def _monte_carlo(trades, initial, sims=1000, seed=7):
-    if len(trades) < 10:
-        return None
+    if len(trades) < 10: return None
     rets = np.array([t["ret"] for t in trades])
     rng = np.random.default_rng(seed)
     finals, dds = [], []
@@ -273,8 +249,11 @@ async def fetch_history(market, symbol, interval="1h", source="futures", candles
         if len(raw) < limit:
             break
     now_ms = int(_t.time() * 1000)
+    # --- تم إصلاح هذا الجزء لإضافة taker_buy_volume (تدفق السيولة) للباكتيست ---
     data = [{"timestamp": int(c[0]), "open": float(c[1]), "high": float(c[2]), "low": float(c[3]),
-             "close": float(c[4]), "volume": float(c[5])} for c in rows if int(c[6]) < now_ms]
+             "close": float(c[4]), "volume": float(c[5]), 
+             "taker_buy_volume": float(c[9]) if len(c) > 9 else float(c[5]) * 0.5} 
+             for c in rows if int(c[6]) < now_ms]
     frame = pd.DataFrame(data).drop_duplicates("timestamp").sort_values("timestamp")
     return frame.reset_index(drop=True)
 
