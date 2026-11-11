@@ -109,6 +109,16 @@ def validate_config():
         raise ValueError("Aggregate portfolio risk must be in (0, 10].")
     if not 0 < RISK_PER_TRADE_PCT <= MAX_PORTFOLIO_RISK_PCT:
         raise ValueError("Invalid per-position risk.")
+        # --- Advanced Filters (Arsenal Phase 1) ---
+USE_FUNDING_RATE_FILTER = True
+MAX_LONG_FUNDING_RATE = 0.0001  # 0.01% (إذا كان أعلى من ذلك، لا نشترى لتجنب تصفية المتداولين)
+MIN_SHORT_FUNDING_RATE = -0.0001 # إذا كان أقل من ذلك، لا نبيع
+
+# --- Trading Sessions (UTC) ---
+USE_SESSION_FILTER = True
+LONDON_OPEN = 7   # 07:00 UTC
+NEW_YORK_OPEN = 12 # 12:00 UTC
+SESSION_END = 21   # 21:00 UTC
     if not 0 < MAX_ALLOCATION_PCT <= 100:
         raise ValueError("Invalid allocation cap.")
     if DB_PATH == ":memory:":
