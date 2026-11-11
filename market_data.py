@@ -60,7 +60,6 @@ class MarketData:
         raise MarketDataError("Request failed")
 
     async def get_fear_and_greed(self):
-        # تحديث كل ساعة
         if datetime.now(timezone.utc).timestamp() - self._fng_cache["timestamp"] < 3600:
             return self._fng_cache["value"]
         try:
@@ -79,7 +78,6 @@ class MarketData:
     async def get_market_breadth(self, source="futures"):
         try:
             tickers = await self.get_tickers_24h(source)
-            # نأخذ أفضل 20 عملة من حيث السيولة
             sorted_t = sorted(tickers.items(), key=lambda x: x[1]["quote_volume"], reverse=True)[:20]
             up_count = sum(1 for s, t in sorted_t if t["change_percent"] > 0)
             return (up_count / len(sorted_t)) * 100
@@ -145,6 +143,32 @@ class MarketData:
         configured = [s for s in config.SYMBOLS if s in eligible]
         liquid = [s for s in configured if tickers.get(s, {}).get("quote_volume", 0) >= config.MIN_24H_VOLUME_USDT]
         return liquid[:config.MAX_SYMBOLS_TO_SCAN]
+
+    # --- الدالة الجديدة التي تم نقلها هنا لحل المشكلة ---
+    async def fetch_history(self, symbol, interval="1h", source="futures", candles=None):
+        import time as _t
+        import pandas as pd
+        candles = candles or config.BACKTEST_CANDLES
+        rows, end = [], None
+        while len(rows) < candles:
+            limit = min(1000, candles - len(rows))
+            params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
+            if end:
+                params["endTime"] = end
+            raw = await self._get(source, self._path(source, "klines"), params)
+            if not raw:
+                break
+            rows = raw + rows
+            end = int(raw[0][0]) - 1
+            if len(raw) < limit:
+                break
+        now_ms = int(_t.time() * 1000)
+        data = [{"timestamp": int(c[0]), "open": float(c[1]), "high": float(c[2]), "low": float(c[3]),
+                 "close": float(c[4]), "volume": float(c[5]), 
+                 "taker_buy_volume": float(c[9]) if len(c) > 9 else float(c[5]) * 0.5} 
+                 for c in rows if int(c[6]) < now_ms]
+        frame = pd.DataFrame(data).drop_duplicates("timestamp").sort_values("timestamp")
+        return frame.reset_index(drop=True)
 
     def get_status(self):
         return {"connected": bool(self.session and not self.session.closed), "sources": ["spot", "futures"], "mode": "public-data-only"}
