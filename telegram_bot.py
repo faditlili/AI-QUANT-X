@@ -1,5 +1,5 @@
 """Optional Telegram notifications and admin-only paper controls."""
-import logging, html
+import asyncio, logging, html
 import config
 
 log=logging.getLogger(__name__)
@@ -19,6 +19,10 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("pause",self.cmd_pause))
             self.app.add_handler(CommandHandler("resume",self.cmd_resume))
             self.app.add_handler(CommandHandler("performance",self.cmd_performance))
+            self.app.add_handler(CommandHandler("strategies",self.cmd_strategies))
+            self.app.add_handler(CommandHandler("balance",self.cmd_balance))
+            self.app.add_handler(CommandHandler("close",self.cmd_close))
+            self.app.add_handler(CommandHandler("backtest",self.cmd_backtest))
             await self.app.initialize(); await self.app.start()
             await self.app.updater.start_polling()
             self.enabled=True
@@ -65,6 +69,59 @@ class TelegramNotifier:
             f"Closed: {p['total_trades']} | Win rate: {p['win_rate']:.1f}% | "
             f"Net PnL: {p['net_pnl']:.2f} | PF: {pf_text}")
 
+    async def cmd_strategies(self,update,context):
+        if not await self._guard(update): return
+        stats=self.db.get_performance_by_strategy()
+        if not stats:
+            await update.effective_message.reply_text("No closed trades yet."); return
+        lines=[]
+        for name,v in stats.items():
+            pf="n/a" if v["profit_factor"] is None else f"{v['profit_factor']:.2f}"
+            lines.append(f"{name}: {v['trades']} trades | WR {v['win_rate']:.0f}% | PF {pf} | {v['net_pnl']:+.2f} USDT")
+        await update.effective_message.reply_text("\n".join(lines))
+
+    async def cmd_balance(self,update,context):
+        if not await self._guard(update): return
+        p=self.db.get_portfolio()
+        await update.effective_message.reply_text(
+            f"Equity: {p['equity']:.2f}\nCash: {p['cash_balance']:.2f}\n"
+            f"Open margin: {p['open_margin']:.2f}\nUnrealized: {p['unrealized_pnl']:+.2f}\n"
+            f"Realized: {p['realized_pnl']:+.2f}")
+
+    async def cmd_close(self,update,context):
+        if not await self._guard(update): return
+        msg=update.effective_message
+        if not context.args or not context.args[0].isdigit():
+            await msg.reply_text("Usage: /close <position id> (see /positions)"); return
+        pos=self.db.get_position(int(context.args[0]))
+        if not pos or pos["status"]!="OPEN":
+            await msg.reply_text("Open position not found."); return
+        try:
+            prices=await self.engine.market.get_last_prices(pos["source"])
+            price=prices[pos["symbol"]]["last_price"]
+            closed=self.engine.trader.close_position(pos["id"],price,"MANUAL")
+            if closed:
+                await msg.reply_text(f"Closed {closed['symbol']} | Net PnL {float(closed['net_pnl']):+.4f} USDT")
+        except Exception as exc:
+            log.exception("Manual close failed"); await msg.reply_text(f"Could not close: {exc}")
+
+    async def cmd_backtest(self,update,context):
+        if not await self._guard(update): return
+        msg=update.effective_message
+        args=context.args or []
+        symbol=(args[0] if args else "BTCUSDT").upper()
+        source=args[1].lower() if len(args)>1 else "futures"
+        if source not in ("spot","futures") or not symbol.isalnum():
+            await msg.reply_text("Usage: /backtest BTCUSDT [spot|futures]"); return
+        await msg.reply_text(f"Running backtest for {symbol} ({source}). This can take up to a minute...")
+        try:
+            from backtest import fetch_history, run_backtest, format_report
+            df=await fetch_history(self.engine.market,symbol,config.BACKTEST_INTERVAL,source,config.BACKTEST_CANDLES)
+            report=await asyncio.to_thread(run_backtest,df,None,source)
+            await msg.reply_text(format_report(symbol,report,config.BACKTEST_INTERVAL)[:4000])
+        except Exception as exc:
+            log.exception("Backtest failed"); await msg.reply_text(f"Backtest failed: {exc}")
+
     async def send(self,message):
         if not self.enabled or not config.TELEGRAM_CHAT_ID: return False
         try:
@@ -76,7 +133,7 @@ class TelegramNotifier:
     async def notify_trade_opened(self, position):
         return await self.send(
             "PAPER POSITION OPENED\n"
-            f"{position['source']} | {position['symbol']} | {position['side']}\n"
+            f"{position['source']} | {position['symbol']} | {position['side']} | {position.get('strategy') or 'n/a'}\n"
             f"Quantity: {position['quantity']:.8g}\n"
             f"Entry: {position['entry_price']:.8g}\n"
             f"Stop: {position['stop_price']:.8g} | Target: {position['target_price']:.8g}\n"
