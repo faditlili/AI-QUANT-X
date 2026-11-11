@@ -1,6 +1,5 @@
-"""Pluggable strategies."""
-import config
-import datetime
+"""Pluggable strategies with Macro Filters."""
+import config, datetime
 from indicators import direction
 from decision_engine import calculate_technical_score, evaluate_setup
 from regime import detect_regime
@@ -21,8 +20,7 @@ class TrendStrategy:
         confirmed = bool(dirs) and len(set(dirs)) == 1 and dirs[0] == want
         reasons = list(tech["reasons"])
         if not confirmed: reasons.append("Timeframes do not agree")
-        return {"strategy": self.name, "side": side, "score": tech["score"], "reasons": reasons,
-                "confirmed": confirmed, "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+        return {"strategy": self.name, "side": side, "score": tech["score"], "reasons": reasons, "confirmed": confirmed, "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
 
 class MeanReversionStrategy:
     name = "mean_reversion"
@@ -34,19 +32,14 @@ class MeanReversionStrategy:
         elif z >= 2 and rsi >= 62: side = "SHORT"
         else: return None
         score, reasons = 40, [f"Price stretched {abs(z):.1f} sigma"]
-        if (side == "LONG" and rsi <= 32) or (side == "SHORT" and rsi >= 68):
-            score += 20; reasons.append("RSI extreme")
-        else:
-            score += 10; reasons.append("RSI leaning extreme")
-        if p["adx"] < config.RANGE_ADX_MAX:
-            score += 15; reasons.append("Ranging market")
-        if p["volume_ratio"] < 2.0:
-            score += 15; reasons.append("No panic volume")
+        if (side == "LONG" and rsi <= 32) or (side == "SHORT" and rsi >= 68): score += 20; reasons.append("RSI extreme")
+        else: score += 10; reasons.append("RSI leaning extreme")
+        if p["adx"] < config.RANGE_ADX_MAX: score += 15; reasons.append("Ranging market")
+        if p["volume_ratio"] < 2.0: score += 15; reasons.append("No panic volume")
         htf = _htf_dir(ctx)
         confirmed = htf != ("BEARISH" if side == "LONG" else "BULLISH")
         if not confirmed: reasons.append("HTF opposes")
-        return {"strategy": self.name, "side": side, "score": score, "reasons": reasons,
-                "confirmed": confirmed, "stop_mult": 1.5, "rr": 1.5}
+        return {"strategy": self.name, "side": side, "score": score, "reasons": reasons, "confirmed": confirmed, "stop_mult": 1.5, "rr": 1.5}
 
 class BreakoutStrategy:
     name = "breakout"
@@ -63,21 +56,17 @@ class BreakoutStrategy:
         if vr >= 1.5: score += 20; reasons.append("Strong volume")
         elif vr >= 1.2: score += 10; reasons.append("Above avg volume")
         rsi = p["rsi"]
-        if (side == "LONG" and 30 < rsi < 75) or (side == "SHORT" and 25 < rsi < 70):
-            score += 15; reasons.append("RSI not exhausted")
+        if (side == "LONG" and 30 < rsi < 75) or (side == "SHORT" and 25 < rsi < 70): score += 15; reasons.append("RSI not exhausted")
         htf = _htf_dir(ctx)
         confirmed = htf != ("BEARISH" if side == "LONG" else "BULLISH")
-        if htf == ("BULLISH" if side == "LONG" else "BEARISH"):
-            score += 10; reasons.append("HTF agrees")
+        if htf == ("BULLISH" if side == "LONG" else "BEARISH"): score += 10; reasons.append("HTF agrees")
         if not confirmed: reasons.append("HTF opposes")
-        return {"strategy": self.name, "side": side, "score": score, "reasons": reasons,
-                "confirmed": confirmed, "stop_mult": 1.5, "rr": 2.5}
+        return {"strategy": self.name, "side": side, "score": score, "reasons": reasons, "confirmed": confirmed, "stop_mult": 1.5, "rr": 2.5}
 
 REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy())}
 
 def _decision(regime, cand, res):
-    base = {"regime": regime, "strategy": cand["strategy"], "score": cand["score"],
-            "stop_mult": cand["stop_mult"], "rr": cand["rr"]}
+    base = {"regime": regime, "strategy": cand["strategy"], "score": cand["score"], "stop_mult": cand["stop_mult"], "rr": cand["rr"]}
     base["reason"] = f"[{regime}/{cand['strategy']}] {res['reason']}"
     base["action"] = res["action"]
     if res["action"] != "HOLD": base["side"] = res["side"]
@@ -88,13 +77,11 @@ def select_signal(ctx, enabled=None):
     if getattr(config, 'USE_SESSION_FILTER', False):
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         if not (config.LONDON_OPEN <= current_hour < config.SESSION_END):
-            return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD",
-                    "reason": "Outside high-liquidity sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+            return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD", "reason": "Outside high-liquidity sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
 
     regime = detect_regime(ctx["primary"])
     if regime == "HIGH_VOL":
-        return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD",
-                "reason": f"[{regime}] Volatility too high", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+        return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD", "reason": f"[{regime}] Volatility too high", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
     
     results = []
     for name in (enabled or config.STRATEGIES):
@@ -103,19 +90,27 @@ def select_signal(ctx, enabled=None):
         cand = strat.evaluate(ctx)
         if not cand: continue
             
-        # 2. Long Filters (VWAP, Funding, Order Flow)
         if cand["side"] == "LONG":
+            # 2. VWAP
             if "vwap" in ctx["primary"] and ctx["primary"]["price"] < ctx["primary"]["vwap"]:
                 cand["reasons"].append("Price below VWAP"); cand["confirmed"] = False
-                
+            # 3. Funding
             if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
                 funding = ctx.get("funding_rate", 0.0)
                 if funding > config.MAX_LONG_FUNDING_RATE:
                     cand["reasons"].append(f"Funding high ({funding:.4f})"); cand["confirmed"] = False
-            
+            # 4. Taker Flow
             taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
             if taker_ratio < 0.45:
                 cand["reasons"].append(f"Weak Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
+            # 5. Fear & Greed (Macro)
+            fng = ctx.get("fear_greed", 50)
+            if fng > 80:
+                cand["reasons"].append(f"Extreme Greed (F&G: {fng})"); cand["confirmed"] = False
+            # 6. Market Breadth (Macro)
+            breadth = ctx.get("breadth", 50.0)
+            if breadth < 30.0:
+                cand["reasons"].append(f"Weak Market Breadth ({breadth:.0f}%)"); cand["confirmed"] = False
                     
         tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
         res = evaluate_setup(tech, ctx["source"], cand["confirmed"], ctx.get("news_risk", 0.0))
@@ -128,5 +123,4 @@ def select_signal(ctx, enabled=None):
     if results:
         cand, res = max(results, key=lambda x: x[0]["score"])
         return _decision(regime, cand, res)
-    return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD",
-            "reason": f"[{regime}] No setup", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+    return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD", "reason": f"[{regime}] No setup", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
