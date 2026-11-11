@@ -84,7 +84,6 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
         pos = None
 
     for i in range(warmup, n):
-        # 1) fill pending signal
         if pending and pos is None:
             sign = 1 if pending["side"] == "LONG" else -1
             entry = op[i] * (1 + sign * slip)
@@ -105,7 +104,6 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
                            "partial_pnl": 0.0, "partial_done": False}
         pending = None
 
-        # 2) manage open position & scale-out
         if pos:
             bars_in_trade += 1
             
@@ -152,7 +150,6 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
             if pos and i == n - 1:
                 close_pos(i, cl[i], "END_OF_DATA")
 
-        # 3) mark to market & protections
         unreal = 0.0
         if pos:
             sign = 1 if pos["side"] == "LONG" else -1
@@ -165,7 +162,6 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
         if dd_until >= 0 and i >= dd_until:
             peak, dd_until = mtm, -1
 
-        # 4) look for a new signal
         if pos is None and i < n - 1 and i >= blocked_until and dd_until < 0:
             if not np.isfinite(ind["atr"].values[i]) or ind["atr"].values[i] <= 0:
                 continue
@@ -268,31 +264,6 @@ def compare_strategies(df, source="futures", **kw):
         out[name] = run_backtest(df, [name], source, **kw)
     out["all"] = run_backtest(df, list(config.STRATEGIES), source, **kw)
     return out
-
-async def fetch_history(market, symbol, interval="1h", source="futures", candles=None):
-    """Page backwards through public klines to collect `candles` completed candles."""
-    import time as _t
-    candles = candles or config.BACKTEST_CANDLES
-    rows, end = [], None
-    while len(rows) < candles:
-        limit = min(1000, candles - len(rows))
-        params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
-        if end:
-            params["endTime"] = end
-        raw = await market._get(source, market._path(source, "klines"), params)
-        if not raw:
-            break
-        rows = raw + rows
-        end = int(raw[0][0]) - 1
-        if len(raw) < limit:
-            break
-    now_ms = int(_t.time() * 1000)
-    data = [{"timestamp": int(c[0]), "open": float(c[1]), "high": float(c[2]), "low": float(c[3]),
-             "close": float(c[4]), "volume": float(c[5]), 
-             "taker_buy_volume": float(c[9]) if len(c) > 9 else float(c[5]) * 0.5} 
-             for c in rows if int(c[6]) < now_ms]
-    frame = pd.DataFrame(data).drop_duplicates("timestamp").sort_values("timestamp")
-    return frame.reset_index(drop=True)
 
 def format_report(symbol, r, interval="1h"):
     pf = r["profit_factor"]
