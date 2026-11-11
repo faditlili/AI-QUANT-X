@@ -3,7 +3,7 @@ import asyncio, logging, time
 import config
 from market_data import MarketData
 from indicators import calculate_indicators, direction
-from decision_engine import calculate_technical_score, evaluate_setup
+from strategies import select_signal
 from risk_manager import RiskManager
 from paper_trading import PaperTrader
 from news_engine import NewsEngine
@@ -15,7 +15,7 @@ class Engine:
         self.db=database; self.market=market or MarketData()
         self.risk=RiskManager(database); self.trader=PaperTrader(database,self.risk)
         self.news=news or NewsEngine()
-        self.running=False; self.task=None; self.last_scan=None; self.last_error=None
+        self.running=False; self.task=None; self.monitor_task=None; self.last_scan=None; self.last_error=None
         self.paused=self.db.get_state("paused","0")=="1"
         self.notifier=None
 
@@ -25,13 +25,16 @@ class Engine:
         self.running=True
         if self.task is None or self.task.done():
             self.task=asyncio.create_task(self._run())
+        if self.monitor_task is None or self.monitor_task.done():
+            self.monitor_task=asyncio.create_task(self._monitor_loop())
 
     async def stop(self):
         self.running=False
-        if self.task:
-            self.task.cancel()
-            try: await self.task
-            except asyncio.CancelledError: pass
+        for task in (self.task,self.monitor_task):
+            if task:
+                task.cancel()
+                try: await task
+                except asyncio.CancelledError: pass
         await self.market.close(); await self.news.close()
 
     async def _run(self):
@@ -53,24 +56,40 @@ class Engine:
             frames[tf]=await self._indicators(symbol,source,tf)
         dirs=[direction(frames[x]) for x in config.TIMEFRAMES]
         primary=frames[config.PRIMARY_TIMEFRAME]
-        technical=calculate_technical_score(primary)
-        side=technical["side"]
-        confirmed=(len(set(dirs))==1 and dirs[0] in ("BULLISH","BEARISH") and
-                   (side=="LONG" if dirs[0]=="BULLISH" else side=="SHORT"))
         news=await self.news.get_news_risk(symbol)
-        result=evaluate_setup(technical,source,confirmed,news.get("risk",0))
-        self.db.add_decision(symbol,source,result["action"],technical["score"],result["reason"])
+        ctx={"source":source,"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
+             "dirs":dirs,"news_risk":news.get("risk",0)}
+        result=select_signal(ctx)
+        self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
         if self.paused or result["action"]=="HOLD":
             return
         if time.time()-float(self.db.get_state(f"cooldown:{source}:{symbol}","0")) < config.SIGNAL_COOLDOWN_SECONDS:
             return
-        opened=self.trader.open_position(symbol,primary["price"],primary["atr"],
-                 result["side"],source,{"score":technical["score"],"timeframes":dirs})
+        opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
+                 {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"]},
+                 stop_mult=result["stop_mult"],rr=result["rr"],strategy=result["strategy"])
         if opened.get("success"):
             self.db.set_state(f"cooldown:{source}:{symbol}",time.time())
-            log.info("Paper position opened: %s %s %s",source,symbol,result["side"])
+            log.info("Paper position opened: %s %s %s (%s)",source,symbol,result["side"],result["strategy"])
             if self.notifier:
                 await self.notifier.notify_trade_opened(opened["position"])
+
+    async def monitor_positions(self):
+        """Fast loop: stops/targets/trailing are checked far more often than the full scan."""
+        sources={p["source"] for p in self.db.get_open_positions()}
+        for source in sources:
+            prices=await self.market.get_last_prices(source)
+            for closed in self.trader.update_market_prices(prices,source):
+                if closed and self.notifier:
+                    await self.notifier.notify_trade_closed(closed)
+
+    async def _monitor_loop(self):
+        while self.running:
+            try: await self.monitor_positions()
+            except asyncio.CancelledError: raise
+            except Exception as exc:
+                log.warning("Position monitor error: %s",exc)
+            await asyncio.sleep(config.POSITION_CHECK_SECONDS)
 
     async def scan_once(self):
         self.last_scan=time.time()
