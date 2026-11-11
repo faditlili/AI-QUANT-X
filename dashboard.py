@@ -1,4 +1,4 @@
-"""FastAPI dashboard with Interactive Backtesting UI."""
+"""FastAPI dashboard with Interactive Backtesting UI & Robust Fetching."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -37,6 +37,7 @@ async def dashboard():
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
   <div class="max-w-md mx-auto px-4 pt-6">
+    <!-- Header -->
     <header class="flex justify-between items-center mb-6">
       <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
       <div class="flex gap-2">
@@ -45,6 +46,7 @@ async def dashboard():
       </div>
     </header>
 
+    <!-- Balance -->
     <section class="text-center mb-8">
       <p class="text-slate-400 text-xs uppercase tracking-widest mb-1 font-mono">Total Estimated Value (USDT)</p>
       <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
@@ -54,6 +56,7 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- Chart -->
     <section class="glass rounded-2xl p-4 mb-6 scanline shadow-[0_0_20px_rgba(0,0,0,0.5)]">
       <div class="flex justify-between items-center mb-2">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
@@ -62,6 +65,7 @@ async def dashboard():
       <div class="h-48 w-full relative"><canvas id="equityChart"></canvas></div>
     </section>
 
+    <!-- Stats -->
     <section class="grid grid-cols-2 gap-3 mb-6">
       <div class="glass rounded-xl p-3 scanline">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
@@ -73,6 +77,7 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- Active Positions -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
@@ -96,7 +101,7 @@ async def dashboard():
         </select>
       </div>
       <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-neon-purple/20 border border-neon-purple text-neon-purple font-bold py-2 rounded-lg hover:bg-neon-purple/30 transition-all">Run Simulation</button>
-      <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800"></div>
+      <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800 max-h-48 overflow-y-auto"></div>
     </div>
   </div>
 
@@ -158,12 +163,23 @@ async function runBacktest() {
 
 async function load(){
  try{
-  const [p, r, ps, perf, status] = await Promise.all([
-      fetch('/api/portfolio').then(y=>y.json()), fetch('/api/risk').then(y=>y.json()),
-      fetch('/api/positions').then(y=>y.json()), fetch('/api/performance').then(y=>y.json()),
+  // استخدام allSettled لضمان عدم انهيار الواجهة إذا فشل أحد الطلبات
+  const results = await Promise.allSettled([
+      fetch('/api/portfolio').then(y=>y.json()), 
+      fetch('/api/risk').then(y=>y.json()),
+      fetch('/api/positions').then(y=>y.json()), 
+      fetch('/api/performance').then(y=>y.json()),
       fetch('/api/status').then(y=>y.json())
   ]);
+  
+  const p = results[0].status === 'fulfilled' ? results[0].value : {equity: 0, cash_balance: 0, unrealized_pnl: 0, realized_pnl: 0};
+  const r = results[1].status === 'fulfilled' ? results[1].value : {open_risk: 0, risk_cap: 0};
+  const ps = results[2].status === 'fulfilled' ? results[2].value : [];
+  const perf = results[3].status === 'fulfilled' ? results[3].value : {win_rate: 0, profit_factor: 0};
+  const status = results[4].status === 'fulfilled' ? results[4].value : {paused: false};
+
   updatePauseButton(status.paused);
+  
   document.getElementById('total-equity').textContent = fmt(p.equity);
   
   const pnlVal = p.unrealized_pnl + p.realized_pnl;
@@ -196,12 +212,13 @@ async function load(){
     `).join('');
   }
 
+  // Chart
   if(!chartInstance) {
     const ctx = document.getElementById('equityChart').getContext('2d');
     let gradient = ctx.createLinearGradient(0, 0, 0, 200);
     gradient.addColorStop(0, 'rgba(0, 243, 255, 0.5)'); gradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
-    let trades = await fetch('/api/trades').then(y=>y.json());
-    let sortedTrades = trades.filter(t => t.status === 'CLOSED').reverse();
+    let tradesRes = await fetch('/api/trades').then(y=>y.json()).catch(()=>[]);
+    let sortedTrades = tradesRes.filter(t => t.status === 'CLOSED').reverse();
     let labels = ['Start']; let data = [200]; 
     sortedTrades.forEach((t, index) => { labels.push('T' + (index+1)); data.push(data[data.length-1] + (Number(t.net_pnl) || 0)); });
     labels.push('Live'); data.push(p.equity);
