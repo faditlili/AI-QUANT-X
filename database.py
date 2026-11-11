@@ -61,6 +61,11 @@ class Database:
           id INTEGER PRIMARY KEY AUTOINCREMENT, equity REAL, created_at TEXT NOT NULL
         );
         """)
+        cols={r["name"] for r in self.conn.execute("PRAGMA table_info(positions)").fetchall()}
+        if "strategy" not in cols:
+            self.conn.execute("ALTER TABLE positions ADD COLUMN strategy TEXT")
+        if "initial_stop" not in cols:
+            self.conn.execute("ALTER TABLE positions ADD COLUMN initial_stop REAL")
         self.conn.commit()
 
     def get_state(self,key,default=None):
@@ -134,11 +139,12 @@ class Database:
                     raise ValueError("Insufficient virtual cash")
                 cur=self.conn.execute("""INSERT INTO positions
                 (symbol,source,side,quantity,entry_price,stop_price,target_price,margin_used,
-                 risk_amount,opening_fee,status,opened_at,metadata)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,'OPEN',?,?)""",
+                 risk_amount,opening_fee,status,opened_at,metadata,strategy,initial_stop)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,'OPEN',?,?,?,?)""",
                 (data["symbol"],data["source"],data["side"],data["quantity"],data["entry_price"],
                  data["stop_price"],data["target_price"],data["margin_used"],data["risk_amount"],
-                 data["opening_fee"],utc_now(),json.dumps(data.get("metadata",{}))))
+                 data["opening_fee"],utc_now(),json.dumps(data.get("metadata",{})),
+                 data.get("strategy"),data.get("initial_stop",data["stop_price"])))
                 pid=cur.lastrowid
                 self.conn.execute("INSERT OR REPLACE INTO state(key,value) VALUES('cash_balance',?)",
                                   (str(cash-data["margin_used"]-data["opening_fee"]),))
@@ -148,6 +154,11 @@ class Database:
             except Exception:
                 self.conn.rollback()
                 raise
+
+    def update_stop(self,pid,stop):
+        with self.lock:
+            self.conn.execute("UPDATE positions SET stop_price=? WHERE id=? AND status='OPEN'",(stop,pid))
+            self.conn.commit()
 
     def mark_position(self,pid,price):
         self.set_state(f"mark:{pid}",price)
@@ -210,6 +221,32 @@ class Database:
                 "win_rate":(len(wins)/len(vals)*100 if vals else 0),
                 "profit_factor":(gp/gl if gl else (None if gp else 0)),
                 "net_pnl":sum(vals),"gross_profit":gp,"gross_loss":gl}
+
+    def get_performance_by_strategy(self):
+        with self.lock:
+            rows=self.conn.execute("SELECT COALESCE(strategy,'unknown') s, net_pnl FROM positions WHERE status='CLOSED'").fetchall()
+        groups={}
+        for r in rows:
+            groups.setdefault(r["s"],[]).append(float(r["net_pnl"] or 0))
+        out={}
+        for name,vals in groups.items():
+            wins=[x for x in vals if x>0]; gl=abs(sum(x for x in vals if x<0)); gp=sum(wins)
+            out[name]={"trades":len(vals),"wins":len(wins),"win_rate":len(wins)/len(vals)*100,
+                       "net_pnl":sum(vals),"profit_factor":(gp/gl if gl else None)}
+        return out
+
+    def get_peak_equity(self):
+        base=float(self.get_state("initial_balance",config.INITIAL_BALANCE))
+        floor=self.get_state("peak_floor"); since=self.get_state("peak_since")
+        with self.lock:
+            if since:
+                r=self.conn.execute("SELECT MAX(equity) m FROM equity_snapshots WHERE created_at>=?",(since,)).fetchone()
+                return max(float(floor or 0),float(r["m"] or 0))
+            r=self.conn.execute("SELECT MAX(equity) m FROM equity_snapshots").fetchone()
+        return max(base,float(r["m"] or 0))
+
+    def reset_peak(self,equity):
+        self.set_state("peak_floor",equity); self.set_state("peak_since",utc_now())
 
     def snapshot(self):
         eq=self.get_portfolio()["equity"]
