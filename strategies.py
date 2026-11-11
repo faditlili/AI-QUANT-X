@@ -73,9 +73,9 @@ def _decision(regime, cand, res):
     return base
 
 def select_signal(ctx, enabled=None):
-    # 1. Session Filter
+    # 1. Session Filter (معدل ليدعم الباكتيست)
     if getattr(config, 'USE_SESSION_FILTER', False):
-        current_hour = datetime.datetime.now(datetime.timezone.utc).hour
+        current_hour = ctx.get("hour_utc", datetime.datetime.now(datetime.timezone.utc).hour)
         if not (config.LONDON_OPEN <= current_hour < config.SESSION_END):
             return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD", "reason": "Outside high-liquidity sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
 
@@ -91,23 +91,18 @@ def select_signal(ctx, enabled=None):
         if not cand: continue
             
         if cand["side"] == "LONG":
-            # 2. VWAP
             if "vwap" in ctx["primary"] and ctx["primary"]["price"] < ctx["primary"]["vwap"]:
                 cand["reasons"].append("Price below VWAP"); cand["confirmed"] = False
-            # 3. Funding
             if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
                 funding = ctx.get("funding_rate", 0.0)
                 if funding > config.MAX_LONG_FUNDING_RATE:
                     cand["reasons"].append(f"Funding high ({funding:.4f})"); cand["confirmed"] = False
-            # 4. Taker Flow
             taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
             if taker_ratio < 0.45:
                 cand["reasons"].append(f"Weak Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
-            # 5. Fear & Greed (Macro)
             fng = ctx.get("fear_greed", 50)
             if fng > 80:
                 cand["reasons"].append(f"Extreme Greed (F&G: {fng})"); cand["confirmed"] = False
-            # 6. Market Breadth (Macro)
             breadth = ctx.get("breadth", 50.0)
             if breadth < 30.0:
                 cand["reasons"].append(f"Weak Market Breadth ({breadth:.0f}%)"); cand["confirmed"] = False
