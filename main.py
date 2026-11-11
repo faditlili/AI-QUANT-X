@@ -11,6 +11,7 @@ from dashboard import router
 
 logging.basicConfig(level=getattr(logging,config.LOG_LEVEL.upper(),logging.INFO),
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx INFO logs include the Telegram bot token in the URL
 config.validate_config()
 
 @asynccontextmanager
