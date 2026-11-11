@@ -50,7 +50,7 @@ class MarketData:
                 "klines": config.FUTURES_KLINES_PATH,
                 "ticker": config.FUTURES_TICKER_24H_PATH,
                 "info": config.FUTURES_EXCHANGE_INFO_PATH,
-                "price": config.FUTURES_PRICE_PATH, # تم تصحيح المسار هنا
+                "price": config.FUTURES_PRICE_PATH,
             },
         }
         return paths[source][kind]
@@ -117,6 +117,7 @@ class MarketData:
                 "high": float(candle[2]), "low": float(candle[3]),
                 "close": float(candle[4]), "volume": float(candle[5]),
                 "quote_volume": float(candle[7]) if len(candle) > 7 else 0.0,
+                "taker_buy_volume": float(candle[9]) if len(candle) > 9 else 0.0,
                 "close_time": int(candle[6])
             })
         frame = pd.DataFrame(rows)
@@ -125,7 +126,6 @@ class MarketData:
         return frame
         
     async def get_last_prices(self, source="futures"):
-        """Lightweight last-price snapshot for fast position monitoring."""
         raw = await self._get(source, self._path(source, "price"))
         if isinstance(raw, dict):
             raw = [raw]
@@ -149,7 +149,6 @@ class MarketData:
     async def get_ticker_24h(self, symbol, source="futures"):
         return (await self.get_tickers_24h(source)).get(symbol)
 
-    # --- الدالة الجديدة لجلب معدل التمويل ---
     async def get_funding_rate(self, symbol, source="futures"):
         if source != "futures":
             return 0.0
