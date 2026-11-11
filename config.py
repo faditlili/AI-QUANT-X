@@ -100,16 +100,15 @@ HTTP_RETRY_ATTEMPTS = 2
 USER_AGENT = "AI-QUANT-X-Paper/4.1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# --- Advanced Filters (Arsenal Phase 1) ---
+# --- Advanced Filters (Arsenal Phase 1 & 2) ---
 USE_FUNDING_RATE_FILTER = True
-MAX_LONG_FUNDING_RATE = 0.0001  # 0.01% (إذا كان أعلى من ذلك، لا نشترى لتجنب تصفية المتداولين)
+MAX_LONG_FUNDING_RATE = 0.0001
 MIN_SHORT_FUNDING_RATE = -0.0001
 
-# --- Trading Sessions (UTC) ---
 USE_SESSION_FILTER = True
-LONDON_OPEN = 7    # 07:00 UTC
-NEW_YORK_OPEN = 12 # 12:00 UTC
-SESSION_END = 21   # 21:00 UTC
+LONDON_OPEN = 7
+NEW_YORK_OPEN = 12
+SESSION_END = 21
 
 def validate_config():
     if not PAPER_MODE:
