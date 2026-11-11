@@ -1,4 +1,4 @@
-"""Ultimate Sci-Fi Dashboard with Trade History & Advanced Metrics."""
+"""Nexus v2 UI with Smooth Binance-Style Chart."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 router=APIRouter()
@@ -93,8 +93,17 @@ tr.loss-row:hover td { background: rgba(255, 0, 60, 0.05); }
 .badge-loss { color: var(--neon-red); text-shadow: 0 0 8px var(--neon-red); }
 
 /* Chart Container */
-.chart-container { background: var(--panel-bg); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 8px; padding: 1.2rem; position: relative;}
+.chart-container { 
+  background: var(--panel-bg); 
+  border: 1px solid rgba(176, 38, 255, 0.2); 
+  border-radius: 8px; 
+  padding: 1.2rem; 
+  position: relative;
+  height: 350px; /* تثبيت الارتفاع لمنع التمدد */
+  min-height: 350px; 
+}
 .chart-container h2 { font-family: 'Orbitron', sans-serif; color: var(--neon-purple); font-size: 0.9rem; margin-bottom: 1rem; text-shadow: 0 0 5px var(--neon-purple); letter-spacing: 1px;}
+.chart-container canvas { max-height: 280px; }
 
 @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes scanline { 0% { left: -100%; } 100% { left: 100%; } }
@@ -120,7 +129,7 @@ tr.loss-row:hover td { background: rgba(255, 0, 60, 0.05); }
 <div class="grid-mid">
   <div class="chart-container">
     <h2>EQUITY CURVE // LIVE TELEMETRY</h2>
-    <canvas id="equityChart" height="120"></canvas>
+    <canvas id="equityChart"></canvas>
   </div>
   
   <div class="card" style="border-color: rgba(0, 255, 102, 0.3);">
@@ -208,7 +217,7 @@ async function load(){
 
   // 3. Trade History (Wins & Losses)
   const hb = document.getElementById('history-body');
-  const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 15); // Show last 15 closed trades
+  const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 15);
   
   if(closedTrades.length === 0) {
     hb.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No closed trades yet.</td></tr>';
@@ -238,7 +247,7 @@ async function load(){
   if(ds.length === 0) {
     db.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No logs available.</td></tr>';
   } else {
-    db.innerHTML = ds.slice(0, 8).map(d => { // Show less decisions to keep UI clean
+    db.innerHTML = ds.slice(0, 8).map(d => {
       const time = new Date(d.created_at).toLocaleTimeString();
       let badgeClass = 'badge-hold';
       if(d.action.includes('BUY')) badgeClass = 'badge-long';
@@ -255,24 +264,26 @@ async function load(){
     }).join('');
   }
 
-  // 5. Chart Rendering (Equity Curve)
+  // 5. Chart Rendering (Smooth Binance-Style Curve)
   if(!chartInstance) {
     const ctx = document.getElementById('equityChart').getContext('2d');
-    let gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(0, 243, 255, 0.6)');
+    
+    // تدرج لوني نيون (Cyan) يختفي في الأسفل
+    let gradient = ctx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, 'rgba(0, 243, 255, 0.4)'); 
     gradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
 
-    // Build accurate curve from closed trades
+    // بناء البيانات من الصفقات
     let sortedTrades = trades.filter(t => t.status === 'CLOSED').reverse();
     let labels = ['Start'];
-    let data = [200]; // Hardcoded initial, ideally fetch this dynamically
+    let data = [200]; // الرصيد الابتدائي
     
     sortedTrades.forEach((t, index) => {
         labels.push('T' + (index+1));
         data.push(data[data.length-1] + (Number(t.net_pnl) || 0));
     });
     
-    // Add current live equity at the end
+    // إضافة الرصيد الحالي
     labels.push('Live');
     data.push(p.equity);
 
@@ -283,29 +294,49 @@ async function load(){
             datasets: [{
                 label: 'Equity',
                 data: data,
-                borderColor: '#00f3ff',
-                backgroundColor: gradient,
-                borderWidth: 2,
-                pointBackgroundColor: '#b026ff',
-                pointBorderColor: '#fff',
-                pointRadius: 2,
+                borderColor: '#00f3ff', // لون الخط (سماوي نيون)
+                backgroundColor: gradient, // التدرج اللوني تحته
+                borderWidth: 3,
+                pointRadius: 0, // إخفاء النقاط لجعله خطاً ناعماً
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#00f3ff',
                 fill: true,
-                tension: 0.4
+                tension: 0.4 // هذا هو السطر السحري الذي يجعل الخط "مموجاً" وناعماً
             }]
         },
         options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', titleColor: '#00f3ff' } },
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false }, 
+                tooltip: { 
+                    mode: 'index', 
+                    intersect: false, 
+                    backgroundColor: 'rgba(0,0,0,0.8)', 
+                    titleColor: '#00f3ff',
+                    displayColors: false
+                } 
+            },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#6b7a99' } },
-                y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#6b7a99' } }
+                x: { 
+                    display: false // إخفاء المحور السيني (مثل بينانس)
+                },
+                y: { 
+                    display: false, // إخفاء المحور الصادي (مثل بينانس)
+                    grace: '15%' // إعطاء هامش علوي وسفلي للرسم
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
             }
         }
     });
   } else {
-     // Live update last point
+     // تحديث النقطة الأخيرة بصمت دون إعادة رسم كامل
      chartInstance.data.datasets[0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity;
-     chartInstance.update('none'); // Update without full animation to prevent flickering
+     chartInstance.update('none'); 
   }
 
  }catch(e){ console.error('System Error:', e); }
@@ -314,7 +345,7 @@ async function load(){
 load(); setInterval(load, 5000);
 </script></body></html>""")
 
-# (باقي الـ APIs تبقى كما هي)
+# (باقي المسارات API كما هي)
 @router.get("/api/status")
 async def status(request:Request):
     return request.app.state.engine.get_status()
