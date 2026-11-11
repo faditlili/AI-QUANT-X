@@ -158,6 +158,15 @@ class MarketData:
     async def get_ticker_24h(self, symbol, source="futures"):
         return (await self.get_tickers_24h(source)).get(symbol)
 
+    async def get_funding_rate(self, symbol, source="futures"):
+    if source != "futures":
+        return 0.0
+    try:
+        raw = await self._get(source, "/fapi/v1/premiumIndex", {"symbol": symbol.upper()})
+        return float(raw.get("lastFundingRate", 0.0))
+    except Exception:
+        return 0.0
+
     async def liquid_symbols(self, source="futures"):
         tickers = await self.get_tickers_24h(source)
         eligible = set(await self.eligible_symbols(source))
