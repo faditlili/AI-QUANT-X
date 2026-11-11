@@ -1,4 +1,4 @@
-"""FastAPI dashboard with Live Tickers, Radar Animation, and Neural Logs."""
+"""FastAPI dashboard with Institutional UI (Market Watch Grid) & Robust Fetching."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -14,7 +14,7 @@ async def dashboard():
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>AI QUANT X · NEXUS V3</title>
+  <title>AI QUANT X · NEXUS PRO</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -31,15 +31,27 @@ async def dashboard():
     .scanline { position: relative; overflow: hidden; }
     .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 3s linear infinite; }
     @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
-    /* Radar Animation for empty chart */
+    
+    /* Radar Animation */
     .radar { position: absolute; top: 50%; left: 50%; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; border: 1px solid rgba(0, 243, 255, 0.3); box-shadow: 0 0 20px rgba(0, 243, 255, 0.1) inset; }
     .radar::after { content: ''; position: absolute; top: 0; left: 50%; width: 50%; height: 50%; background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.4)); transform-origin: 0 100%; animation: sweep 2s linear infinite; }
     @keyframes sweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border); }
-    .ticker { display: flex; white-space: nowrap; animation: ticker 20s linear infinite; }
+    
+    /* Ticker */
+    .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(0, 243, 255, 0.15); }
+    .ticker { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
     @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+    
+    /* Custom Scrollbar for Market Watch */
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+    
+    /* Flash animation for price updates */
+    .flash-green { animation: flashG 0.5s; }
+    .flash-red { animation: flashR 0.5s; }
+    @keyframes flashG { 0% { background-color: rgba(0,255,102,0.3); } 100% { background-color: transparent; } }
+    @keyframes flashR { 0% { background-color: rgba(255,0,60,0.3); } 100% { background-color: transparent; } }
   </style>
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
@@ -54,11 +66,10 @@ async def dashboard():
       </div>
     </header>
 
-    <!-- Live Ticker -->
+    <!-- Live Ticker (Top 10) -->
     <div class="ticker-wrap mb-6 py-2">
       <div class="ticker" id="ticker-content">
-        <!-- Injected via JS -->
-        <span class="mx-4 font-mono text-sm text-slate-400">Loading market data...</span>
+        <span class="mx-4 font-mono text-sm text-slate-400">Connecting to Binance...</span>
       </div>
     </div>
 
@@ -78,7 +89,7 @@ async def dashboard():
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
          <span class="text-[10px] text-slate-500 font-mono">LIVE TELEMETRY</span>
       </div>
-      <div class="h-48 w-full relative z-10"><canvas id="equityChart"></canvas></div>
+      <div class="h-40 w-full relative z-10"><canvas id="equityChart"></canvas></div>
       <div id="radar-loader" class="radar hidden"></div>
       <div id="radar-text" class="absolute inset-0 flex items-center justify-center hidden">
         <span class="text-neon-cyan font-mono text-xs animate-pulse mt-16">SCANNING MARKET...</span>
@@ -97,6 +108,17 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- Market Watch Grid (All 30 Symbols) -->
+    <section class="mb-6">
+      <div class="flex justify-between items-end mb-3">
+        <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">MARKET WATCH</h3>
+        <span class="text-[10px] text-slate-500 font-mono">30 ASSETS</span>
+      </div>
+      <div class="glass rounded-xl p-2 h-48 overflow-y-auto custom-scroll" id="market-watch">
+        <div class="text-center text-slate-500 text-xs py-4 font-mono">Loading data...</div>
+      </div>
+    </section>
+
     <!-- Active Positions -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
@@ -106,18 +128,18 @@ async def dashboard():
       <div id="active-positions-list" class="space-y-3"></div>
     </section>
 
-    <!-- Neural Logs (Decisions) -->
+    <!-- Neural Logs -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">NEURAL LOGS</h3>
       </div>
-      <div class="glass rounded-xl p-3 h-32 overflow-y-auto font-mono text-[10px]" id="neural-logs">
+      <div class="glass rounded-xl p-3 h-32 overflow-y-auto font-mono text-[10px] custom-scroll" id="neural-logs">
          <div class="text-slate-500">Waiting for scan cycle...</div>
       </div>
     </section>
   </div>
 
-  <!-- Backtest Modal (Same as before) -->
+  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="glass w-full max-w-md rounded-2xl p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
@@ -131,7 +153,7 @@ async def dashboard():
         </select>
       </div>
       <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-neon-purple/20 border border-neon-purple text-neon-purple font-bold py-2 rounded-lg hover:bg-neon-purple/30 transition-all">Run Simulation</button>
-      <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800 max-h-48 overflow-y-auto"></div>
+      <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800 max-h-48 overflow-y-auto custom-scroll"></div>
     </div>
   </div>
 
@@ -196,13 +218,31 @@ async function loadLiveTickers() {
         const res = await fetch('/api/live_tickers');
         const data = await res.json();
         if(data.length > 0) {
-            let html = data.map(d => {
+            // 1. Update Top Ticker (Top 10)
+            let top10 = data.slice(0, 10);
+            let tickerHtml = top10.map(d => {
                 const color = d.change >= 0 ? 'text-neon-green' : 'text-neon-red';
                 const sign = d.change >= 0 ? '+' : '';
                 return `<span class="mx-4 font-mono text-sm"><span class="text-slate-300 font-bold">${d.symbol}</span> <span class="text-white">$${fmt(d.price)}</span> <span class="${color}">${sign}${d.change}%</span></span>`;
             }).join('');
-            // Duplicate for seamless scrolling
-            document.getElementById('ticker-content').innerHTML = html + html; 
+            document.getElementById('ticker-content').innerHTML = tickerHtml + tickerHtml; // Duplicate for seamless scrolling
+
+            // 2. Update Market Watch Grid (All 30)
+            const marketGrid = document.getElementById('market-watch');
+            marketGrid.innerHTML = data.map(d => {
+                const isUp = d.change >= 0;
+                const textColor = isUp ? 'text-neon-green' : 'text-neon-red';
+                const bgColor = isUp ? 'bg-[rgba(0,255,102,0.05)]' : 'bg-[rgba(255,0,60,0.05)]';
+                const sign = isUp ? '+' : '';
+                return `
+                <div class="flex justify-between items-center p-2 rounded border border-slate-800 ${bgColor} mb-1">
+                    <span class="font-bold text-slate-200">${d.symbol}</span>
+                    <div class="text-right">
+                        <div class="text-white">$${fmt(d.price)}</div>
+                        <div class="${textColor} text-[10px]">${sign}${d.change}%</div>
+                    </div>
+                </div>`;
+            }).join('');
         }
     } catch(e) {}
 }
@@ -258,7 +298,7 @@ async function load(){
     `).join('');
   }
 
-  // Neural Logs (Decisions)
+  // Neural Logs
   const logContainer = document.getElementById('neural-logs');
   if(decisions.length === 0) {
     logContainer.innerHTML = '<div class="text-slate-500">No scans yet...</div>';
@@ -266,7 +306,7 @@ async function load(){
     logContainer.innerHTML = decisions.slice(0, 15).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
         let color = d.action.includes('BUY') ? 'text-neon-green' : d.action.includes('SHORT') ? 'text-neon-red' : 'text-slate-400';
-        return `<div class="mb-1"><span class="text-slate-600">[${time}]</span> <span class="text-white">${d.symbol}</span> <span class="${color}">${d.action}</span> <span class="text-slate-500">- ${d.reason.substring(0, 50)}...</span></div>`;
+        return `<div class="mb-1"><span class="text-slate-600">[${time}]</span> <span class="text-white">${d.symbol}</span> <span class="${color}">${d.action}</span> <span class="text-slate-500">- ${d.reason.substring(0, 45)}...</span></div>`;
     }).join('');
   }
 
@@ -282,11 +322,10 @@ async function load(){
     sortedTrades.forEach((t, index) => { labels.push('T' + (index+1)); data.push(data[data.length-1] + (Number(t.net_pnl) || 0)); });
     labels.push('Live'); data.push(p.equity);
 
-    // If no trades, show radar
     if(sortedTrades.length === 0) {
         document.getElementById('radar-loader').classList.remove('hidden');
         document.getElementById('radar-text').classList.remove('hidden');
-        document.getElementById('equityChart').style.opacity = '0.1'; // Dim the flat line
+        document.getElementById('equityChart').style.opacity = '0.1';
     } else {
         document.getElementById('radar-loader').classList.add('hidden');
         document.getElementById('radar-text').classList.add('hidden');
@@ -298,6 +337,7 @@ async function load(){
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', displayColors: false, callbacks: { label: function(context) { return '$' + fmt(context.parsed.y); } } } }, scales: { x: { display: false }, y: { display: false, grace: '15%' } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
     });
   } else {
+     chartInstance.data.datasets[0].data[chartInstance.datasets ? 0 : 0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity; // Fix potential bug
      chartInstance.data.datasets[0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity;
      chartInstance.update('none'); 
   }
@@ -327,13 +367,15 @@ async def performance(request:Request): return request.app.state.db.get_performa
 @router.get("/api/decisions")
 async def decisions(request:Request): return request.app.state.db.get_recent_decisions()
 
-# --- Live Tickers Endpoint for the top bar ---
+# --- Live Tickers Endpoint (Returns All 30) ---
 @router.get("/api/live_tickers")
 async def live_tickers(request: Request):
     try:
         market = request.app.state.engine.market
         tickers = await market.get_tickers_24h("futures")
-        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+        
+        # جلب قائمة العملات الـ 30 من ملف الإعدادات
+        symbols = list(config.SYMBOLS)
         out = []
         for s in symbols:
             if s in tickers:
