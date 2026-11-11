@@ -17,7 +17,10 @@ class TrendStrategy:
         if side == "NONE": return None
         dirs = ctx.get("dirs") or []
         want = "BULLISH" if side == "LONG" else "BEARISH"
-        confirmed = bool(dirs) and len(set(dirs)) == 1 and dirs[0] == want
+        
+        # --- تعديل القناص: نكتفي بتأكيد إطار الساعة وإطار الـ 4 ساعات ---
+        confirmed = len(dirs) >= 2 and dirs[1] == want and dirs[-1] == want
+        
         reasons = list(tech["reasons"])
         if not confirmed: reasons.append("Timeframes do not agree")
         return {"strategy": self.name, "side": side, "score": tech["score"], "reasons": reasons, "confirmed": confirmed, "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
@@ -28,9 +31,12 @@ class MeanReversionStrategy:
     def evaluate(self, ctx):
         p = ctx["primary"]
         z, rsi = p["zscore"], p["rsi"]
-        if z <= -2 and rsi <= 38: side = "LONG"
-        elif z >= 2 and rsi >= 62: side = "SHORT"
+        
+        # --- تعديل القناص: تخفيف شروط الارتداد قليلاً لالتقاط صفقات في السوق العرضي ---
+        if z <= -1.5 and rsi <= 42: side = "LONG"
+        elif z >= 1.5 and rsi >= 58: side = "SHORT"
         else: return None
+        
         score, reasons = 40, [f"Price stretched {abs(z):.1f} sigma"]
         if (side == "LONG" and rsi <= 32) or (side == "SHORT" and rsi >= 68): score += 20; reasons.append("RSI extreme")
         else: score += 10; reasons.append("RSI leaning extreme")
