@@ -87,6 +87,10 @@ def compute_frame(frame):
     # Volatility regime: percentile of ATR relative to price
     atr_pct = atr / close
     df["atr_pctile"] = atr_pct.rolling(100, min_periods=30).apply(_pctile_of_last, raw=True).fillna(50.0)
+
+    # VWAP Calculation
+    typical_price = (high + low + close) / 3
+    df["vwap"] = (typical_price * df.volume).cumsum() / df.volume.cumsum()
     return df
 
 _KEYS = ("ema9","ema21","ema50","rsi","atr","adx","plus_di","minus_di","volume_sma","volume_ratio",
