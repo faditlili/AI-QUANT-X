@@ -50,7 +50,7 @@ class MarketData:
                 "klines": config.FUTURES_KLINES_PATH,
                 "ticker": config.FUTURES_TICKER_24H_PATH,
                 "info": config.FUTURES_EXCHANGE_INFO_PATH,
-                "price": config.SPOT_PRICE_PATH, # تأكد من أن هذا المسار صحيح للفيوتشرز
+                "price": config.FUTURES_PRICE_PATH, # تأكد من أن هذا المسار صحيح للفيوتشرز
             },
         }
         return paths[source][kind]
