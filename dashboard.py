@@ -1,8 +1,8 @@
-"""FastAPI dashboard with Interactive Backtesting UI & Robust Fetching."""
+"""FastAPI dashboard with Live Tickers, Radar Animation, and Neural Logs."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
-from backtest import run_backtest, format_report  # <--- تم حذف fetch_history من هنا
+from backtest import run_backtest, format_report
 import config
 
 router=APIRouter()
@@ -14,7 +14,7 @@ async def dashboard():
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>AI QUANT X · NEXUS</title>
+  <title>AI QUANT X · NEXUS V3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -31,12 +31,21 @@ async def dashboard():
     .scanline { position: relative; overflow: hidden; }
     .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 3s linear infinite; }
     @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
+    /* Radar Animation for empty chart */
+    .radar { position: absolute; top: 50%; left: 50%; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; border: 1px solid rgba(0, 243, 255, 0.3); box-shadow: 0 0 20px rgba(0, 243, 255, 0.1) inset; }
+    .radar::after { content: ''; position: absolute; top: 0; left: 50%; width: 50%; height: 50%; background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.4)); transform-origin: 0 100%; animation: sweep 2s linear infinite; }
+    @keyframes sweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border); }
+    .ticker { display: flex; white-space: nowrap; animation: ticker 20s linear infinite; }
+    @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
   </style>
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
   <div class="max-w-md mx-auto px-4 pt-6">
+    
+    <!-- Header -->
     <header class="flex justify-between items-center mb-6">
       <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
       <div class="flex gap-2">
@@ -45,6 +54,15 @@ async def dashboard():
       </div>
     </header>
 
+    <!-- Live Ticker -->
+    <div class="ticker-wrap mb-6 py-2">
+      <div class="ticker" id="ticker-content">
+        <!-- Injected via JS -->
+        <span class="mx-4 font-mono text-sm text-slate-400">Loading market data...</span>
+      </div>
+    </div>
+
+    <!-- Balance -->
     <section class="text-center mb-8">
       <p class="text-slate-400 text-xs uppercase tracking-widest mb-1 font-mono">Total Estimated Value (USDT)</p>
       <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
@@ -54,14 +72,20 @@ async def dashboard():
       </div>
     </section>
 
-    <section class="glass rounded-2xl p-4 mb-6 scanline shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-      <div class="flex justify-between items-center mb-2">
+    <!-- Chart -->
+    <section class="glass rounded-2xl p-4 mb-6 scanline shadow-[0_0_20px_rgba(0,0,0,0.5)] relative">
+      <div class="flex justify-between items-center mb-2 relative z-10">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
          <span class="text-[10px] text-slate-500 font-mono">LIVE TELEMETRY</span>
       </div>
-      <div class="h-48 w-full relative"><canvas id="equityChart"></canvas></div>
+      <div class="h-48 w-full relative z-10"><canvas id="equityChart"></canvas></div>
+      <div id="radar-loader" class="radar hidden"></div>
+      <div id="radar-text" class="absolute inset-0 flex items-center justify-center hidden">
+        <span class="text-neon-cyan font-mono text-xs animate-pulse mt-16">SCANNING MARKET...</span>
+      </div>
     </section>
 
+    <!-- Stats -->
     <section class="grid grid-cols-2 gap-3 mb-6">
       <div class="glass rounded-xl p-3 scanline">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
@@ -73,6 +97,7 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- Active Positions -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
@@ -80,8 +105,19 @@ async def dashboard():
       </div>
       <div id="active-positions-list" class="space-y-3"></div>
     </section>
+
+    <!-- Neural Logs (Decisions) -->
+    <section class="mb-6">
+      <div class="flex justify-between items-end mb-3">
+        <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">NEURAL LOGS</h3>
+      </div>
+      <div class="glass rounded-xl p-3 h-32 overflow-y-auto font-mono text-[10px]" id="neural-logs">
+         <div class="text-slate-500">Waiting for scan cycle...</div>
+      </div>
+    </section>
   </div>
 
+  <!-- Backtest Modal (Same as before) -->
   <div id="backtest-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="glass w-full max-w-md rounded-2xl p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
@@ -155,19 +191,38 @@ async function runBacktest() {
     btn.disabled = false;
 }
 
+async function loadLiveTickers() {
+    try {
+        const res = await fetch('/api/live_tickers');
+        const data = await res.json();
+        if(data.length > 0) {
+            let html = data.map(d => {
+                const color = d.change >= 0 ? 'text-neon-green' : 'text-neon-red';
+                const sign = d.change >= 0 ? '+' : '';
+                return `<span class="mx-4 font-mono text-sm"><span class="text-slate-300 font-bold">${d.symbol}</span> <span class="text-white">$${fmt(d.price)}</span> <span class="${color}">${sign}${d.change}%</span></span>`;
+            }).join('');
+            // Duplicate for seamless scrolling
+            document.getElementById('ticker-content').innerHTML = html + html; 
+        }
+    } catch(e) {}
+}
+
 async function load(){
  try{
   const results = await Promise.allSettled([
-      fetch('/api/portfolio').then(y=>y.json()), fetch('/api/risk').then(y=>y.json()),
-      fetch('/api/positions').then(y=>y.json()), fetch('/api/performance').then(y=>y.json()),
-      fetch('/api/status').then(y=>y.json())
+      fetch('/api/portfolio').then(y=>y.json()), 
+      fetch('/api/risk').then(y=>y.json()),
+      fetch('/api/positions').then(y=>y.json()), 
+      fetch('/api/performance').then(y=>y.json()),
+      fetch('/api/status').then(y=>y.json()),
+      fetch('/api/decisions').then(y=>y.json())
   ]);
   
   const p = results[0].status === 'fulfilled' ? results[0].value : {equity: 0, cash_balance: 0, unrealized_pnl: 0, realized_pnl: 0};
-  const r = results[1].status === 'fulfilled' ? results[1].value : {open_risk: 0, risk_cap: 0};
   const ps = results[2].status === 'fulfilled' ? results[2].value : [];
   const perf = results[3].status === 'fulfilled' ? results[3].value : {win_rate: 0, profit_factor: 0};
   const status = results[4].status === 'fulfilled' ? results[4].value : {paused: false};
+  const decisions = results[5].status === 'fulfilled' ? results[5].value : [];
 
   updatePauseButton(status.paused);
   document.getElementById('total-equity').textContent = fmt(p.equity);
@@ -182,6 +237,7 @@ async function load(){
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = perf.profit_factor ? fmt(perf.profit_factor) : '0.00';
 
+  // Active Positions
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
   if(ps.length === 0) {
@@ -202,15 +258,41 @@ async function load(){
     `).join('');
   }
 
+  // Neural Logs (Decisions)
+  const logContainer = document.getElementById('neural-logs');
+  if(decisions.length === 0) {
+    logContainer.innerHTML = '<div class="text-slate-500">No scans yet...</div>';
+  } else {
+    logContainer.innerHTML = decisions.slice(0, 15).map(d => {
+        const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        let color = d.action.includes('BUY') ? 'text-neon-green' : d.action.includes('SHORT') ? 'text-neon-red' : 'text-slate-400';
+        return `<div class="mb-1"><span class="text-slate-600">[${time}]</span> <span class="text-white">${d.symbol}</span> <span class="${color}">${d.action}</span> <span class="text-slate-500">- ${d.reason.substring(0, 50)}...</span></div>`;
+    }).join('');
+  }
+
+  // Chart
   if(!chartInstance) {
     const ctx = document.getElementById('equityChart').getContext('2d');
     let gradient = ctx.createLinearGradient(0, 0, 0, 200);
     gradient.addColorStop(0, 'rgba(0, 243, 255, 0.5)'); gradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
     let tradesRes = await fetch('/api/trades').then(y=>y.json()).catch(()=>[]);
     let sortedTrades = tradesRes.filter(t => t.status === 'CLOSED').reverse();
+    
     let labels = ['Start']; let data = [200]; 
     sortedTrades.forEach((t, index) => { labels.push('T' + (index+1)); data.push(data[data.length-1] + (Number(t.net_pnl) || 0)); });
     labels.push('Live'); data.push(p.equity);
+
+    // If no trades, show radar
+    if(sortedTrades.length === 0) {
+        document.getElementById('radar-loader').classList.remove('hidden');
+        document.getElementById('radar-text').classList.remove('hidden');
+        document.getElementById('equityChart').style.opacity = '0.1'; // Dim the flat line
+    } else {
+        document.getElementById('radar-loader').classList.add('hidden');
+        document.getElementById('radar-text').classList.add('hidden');
+        document.getElementById('equityChart').style.opacity = '1';
+    }
+
     chartInstance = new Chart(ctx, {
         type: 'line', data: { labels: labels, datasets: [{ data: data, borderColor: '#00f3ff', backgroundColor: gradient, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointBackgroundColor: '#00f3ff', fill: true, tension: 0.4 }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', displayColors: false, callbacks: { label: function(context) { return '$' + fmt(context.parsed.y); } } } }, scales: { x: { display: false }, y: { display: false, grace: '15%' } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
@@ -221,7 +303,11 @@ async function load(){
   }
  }catch(e){ console.error('System Error:', e); }
 }
-load(); setInterval(load, 3000);
+
+loadLiveTickers();
+load(); 
+setInterval(load, 3000);
+setInterval(loadLiveTickers, 10000);
 </script>
 </body>
 </html>""")
@@ -238,6 +324,27 @@ async def positions(request:Request): return request.app.state.db.get_open_posit
 async def trades(request:Request): return request.app.state.db.get_recent_trades()
 @router.get("/api/performance")
 async def performance(request:Request): return request.app.state.db.get_performance()
+@router.get("/api/decisions")
+async def decisions(request:Request): return request.app.state.db.get_recent_decisions()
+
+# --- Live Tickers Endpoint for the top bar ---
+@router.get("/api/live_tickers")
+async def live_tickers(request: Request):
+    try:
+        market = request.app.state.engine.market
+        tickers = await market.get_tickers_24h("futures")
+        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+        out = []
+        for s in symbols:
+            if s in tickers:
+                out.append({
+                    "symbol": s.replace("USDT", ""),
+                    "price": tickers[s]["last_price"],
+                    "change": round(tickers[s]["change_percent"], 2)
+                })
+        return out
+    except Exception:
+        return []
 
 @router.post("/api/toggle_pause")
 async def toggle_pause(request:Request):
@@ -262,10 +369,7 @@ async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: 
     try:
         engine = request.app.state.engine
         market = engine.market
-        
-        # --- تم التعديل هنا لاستخدام market.fetch_history بدلاً من الدالة المحذوفة ---
         df = await market.fetch_history(symbol, "1h", "futures", 1000)
-        
         if df.empty: return {"success": False, "error": "Failed to fetch history"}
         strategies = None if strategy == "all" else [strategy]
         report = await asyncio.to_thread(run_backtest, df, strategies, "futures")
