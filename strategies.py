@@ -1,4 +1,4 @@
-"""Pluggable strategies with Macro Filters."""
+"""Pluggable strategies with Macro Filters (Symmetric for Long & Short)."""
 import config, datetime
 from indicators import direction
 from decision_engine import calculate_technical_score, evaluate_setup
@@ -73,7 +73,7 @@ def _decision(regime, cand, res):
     return base
 
 def select_signal(ctx, enabled=None):
-    # 1. Session Filter (معدل ليدعم الباكتيست)
+    # 1. Session Filter
     if getattr(config, 'USE_SESSION_FILTER', False):
         current_hour = ctx.get("hour_utc", datetime.datetime.now(datetime.timezone.utc).hour)
         if not (config.LONDON_OPEN <= current_hour < config.SESSION_END):
@@ -90,6 +90,7 @@ def select_signal(ctx, enabled=None):
         cand = strat.evaluate(ctx)
         if not cand: continue
             
+        # --- الفلاتر المتقدمة (متوازنة للشراء والبيع) ---
         if cand["side"] == "LONG":
             if "vwap" in ctx["primary"] and ctx["primary"]["price"] < ctx["primary"]["vwap"]:
                 cand["reasons"].append("Price below VWAP"); cand["confirmed"] = False
@@ -100,12 +101,26 @@ def select_signal(ctx, enabled=None):
             taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
             if taker_ratio < 0.45:
                 cand["reasons"].append(f"Weak Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
-            fng = ctx.get("fear_greed", 50)
-            if fng > 80:
-                cand["reasons"].append(f"Extreme Greed (F&G: {fng})"); cand["confirmed"] = False
-            breadth = ctx.get("breadth", 50.0)
-            if breadth < 30.0:
-                cand["reasons"].append(f"Weak Market Breadth ({breadth:.0f}%)"); cand["confirmed"] = False
+            if ctx.get("fear_greed", 50) > 80:
+                cand["reasons"].append("Extreme Greed"); cand["confirmed"] = False
+            if ctx.get("breadth", 50.0) < 30.0:
+                cand["reasons"].append("Weak Breadth"); cand["confirmed"] = False
+                
+        elif cand["side"] == "SHORT":
+            # فلاتر البيع العكسية
+            if "vwap" in ctx["primary"] and ctx["primary"]["price"] > ctx["primary"]["vwap"]:
+                cand["reasons"].append("Price above VWAP"); cand["confirmed"] = False
+            if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
+                funding = ctx.get("funding_rate", 0.0)
+                if funding < config.MIN_SHORT_FUNDING_RATE:
+                    cand["reasons"].append(f"Funding low ({funding:.4f})"); cand["confirmed"] = False
+            taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
+            if taker_ratio > 0.55: # مشترون أقوياء جداً، لا تبع
+                cand["reasons"].append(f"Strong Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
+            if ctx.get("fear_greed", 50) < 20:
+                cand["reasons"].append("Extreme Fear"); cand["confirmed"] = False
+            if ctx.get("breadth", 50.0) > 70.0:
+                cand["reasons"].append("Strong Breadth"); cand["confirmed"] = False
                     
         tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
         res = evaluate_setup(tech, ctx["source"], cand["confirmed"], ctx.get("news_risk", 0.0))
