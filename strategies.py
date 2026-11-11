@@ -107,11 +107,20 @@ def _decision(regime, cand, res):
     return base
 
 def select_signal(ctx, enabled=None):
+    # --- Session Filter (تجنب التداول في أوقات السيولة الميتة) ---
+    if getattr(config, 'USE_SESSION_FILTER', False):
+        import datetime
+        current_hour = datetime.datetime.now(datetime.timezone.utc).hour
+        if not (config.LONDON_OPEN <= current_hour < config.SESSION_END):
+            return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD",
+                    "reason": "Outside high-liquidity trading sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+
     regime = detect_regime(ctx["primary"])
     if regime == "HIGH_VOL":
         return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD",
                 "reason": f"[{regime}] Volatility too high, standing aside",
                 "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
+    
     results = []
     for name in (enabled or config.STRATEGIES):
         strat = REGISTRY.get(name)
@@ -120,9 +129,25 @@ def select_signal(ctx, enabled=None):
         cand = strat.evaluate(ctx)
         if not cand:
             continue
+            
+        # --- Advanced Filters (VWAP & Funding Rate) ---
+        if cand["side"] == "LONG":
+            # 1. VWAP Filter (لا تشتري إذا كان السعر تحت المؤسسات)
+            if "vwap" in ctx["primary"] and ctx["primary"]["price"] < ctx["primary"]["vwap"]:
+                cand["reasons"].append("Price below VWAP (Institutional resistance)")
+                cand["confirmed"] = False
+                
+            # 2. Funding Rate Filter (لا تشتري في قمة الزحام)
+            if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
+                funding = ctx.get("funding_rate", 0.0)
+                if funding > config.MAX_LONG_FUNDING_RATE:
+                    cand["reasons"].append(f"Funding rate too high ({funding:.4f})")
+                    cand["confirmed"] = False
+                    
         tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
         res = evaluate_setup(tech, ctx["source"], cand["confirmed"], ctx.get("news_risk", 0.0))
         results.append((cand, res))
+        
     entries = [(c, r) for c, r in results if r["action"] != "HOLD"]
     if entries:
         cand, res = max(entries, key=lambda x: x[0]["score"])
