@@ -41,15 +41,16 @@ class MarketData:
     def _path(self, source, kind):
         paths = {
             "spot": {
+                
                 "klines": config.SPOT_KLINES_PATH,
                 "ticker": config.SPOT_TICKER_24H_PATH,
                 "info": config.SPOT_EXCHANGE_INFO_PATH,
-            },
-            "futures": {
+                "price": config.SPOT_PRICE_PATH, },
+            "futures": {              
                 "klines": config.FUTURES_KLINES_PATH,
                 "ticker": config.FUTURES_TICKER_24H_PATH,
                 "info": config.FUTURES_EXCHANGE_INFO_PATH,
-            },
+                "price": config.SPOT_PRICE_PATH, },
         }
         return paths[source][kind]
 
@@ -121,7 +122,13 @@ class MarketData:
         if len(frame) < config.MIN_CANDLES_REQUIRED:
             raise MarketDataError("Not enough completed candles")
         return frame
-
+        async def get_last_prices(self, source="futures"):
+        """Lightweight last-price snapshot for fast position monitoring."""
+        raw = await self._get(source, self._path(source, "price"))
+        if isinstance(raw, dict):
+            raw = [raw]
+        return {x["symbol"]: {"last_price": float(x["price"])}
+                for x in raw if x.get("symbol") and x.get("price")}
     async def get_tickers_24h(self, source="futures"):
         raw = await self._get(source, self._path(source, "ticker"))
         if isinstance(raw, dict):
