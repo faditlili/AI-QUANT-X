@@ -36,7 +36,7 @@ PRIMARY_TIMEFRAME = "1h"
 KLINE_LIMIT = 200
 MIN_CANDLES_REQUIRED = 60
 MIN_24H_VOLUME_USDT = float(os.getenv("MIN_24H_VOLUME_USDT", "5000000"))
-MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "15"))
+MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "30")) # <--- تم الزيادة إلى 30 لزيادة الفرص
 EXCLUDED_SYMBOLS = set()
 EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
@@ -44,7 +44,7 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 3
-MIN_SIGNAL_SCORE = 50 # <--- تم التخفيض من 65 إلى 50 لزيادة الفرص
+MIN_SIGNAL_SCORE = 50 # <--- تم التخفيض من 65 ليتناسب مع الفلاتر الجديدة
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
@@ -79,7 +79,7 @@ RISK_PER_TRADE_PCT = 0.5
 MAX_PORTFOLIO_RISK_PCT = 10.0
 MAX_ALLOCATION_PCT = 10.0
 DAILY_LOSS_LIMIT_PCT = 3.0
-FEE_RATE = 0.0004 # <--- تم تعديلها لتناسب عمولة Binance Futures
+FEE_RATE = 0.0004 # <--- عمولة فيوتشرز بينانس
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
 REWARD_RISK_RATIO = 2.0
@@ -102,17 +102,17 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # --- Advanced Filters (Arsenal Phase 1) ---
 USE_FUNDING_RATE_FILTER = True
-MAX_LONG_FUNDING_RATE = 0.0005 # <--- تم التخفيف من 0.0001 إلى 0.0005
+MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
 
 # --- Trading Sessions (UTC) ---
-USE_SESSION_FILTER = False # <--- تم الإيقاف مؤقتاً لإعطاء البوت حرية أكبر في الباكتيست
+USE_SESSION_FILTER = False # <--- مغلق مؤقتاً
 LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
 # --- Scale-Out (Partial Profit Taking Phase 3) ---
-SCALE_OUT_ENABLED = False # <--- تم الإيقاف مؤقتاً لكي تترك الصفقات الرابحة تجري
+SCALE_OUT_ENABLED = False # <--- مغلق مؤقتاً
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
