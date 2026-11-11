@@ -155,7 +155,11 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
                 continue
             snap = snapshot(ind, i)
             d = direction(snap)
-            ctx = {"source": source, "primary": snap, "dirs": [d, htf[i]], "news_risk": 0.0}
+            
+            # --- تعديل كلود: استخدام وقت الشمعة بدلاً من وقت السيرفر ---
+            ctx = {"source": source, "primary": snap, "dirs": [d, htf[i]], "news_risk": 0.0,
+                   "hour_utc": int((ts[i] // 3600000) % 24)}
+            
             sig = select_signal(ctx, strategies)
             if sig["action"] != "HOLD":
                 pending = {"side": sig["side"], "strategy": sig["strategy"], "regime": sig["regime"],
