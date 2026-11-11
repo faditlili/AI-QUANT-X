@@ -68,3 +68,6 @@ async def performance(request:Request):
 @router.get("/api/decisions")
 async def decisions(request:Request):
     return request.app.state.db.get_recent_decisions()
+@router.get("/api/strategies")
+async def strategies(request:Request):
+    return request.app.state.db.get_performance_by_strategy()
