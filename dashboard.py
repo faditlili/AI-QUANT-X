@@ -284,17 +284,24 @@ async function load(){
     posContainer.innerHTML = '<div class="text-center text-slate-500 text-sm py-4 glass rounded-xl">No active positions</div>';
   } else {
     posContainer.innerHTML = ps.map(pos => `
-      <div class="glass rounded-xl p-4 relative overflow-hidden border-l-2 ${pos.side === 'LONG' ? 'border-l-neon-green' : 'border-l-neon-red'}">
-        <div class="flex justify-between items-start mb-2">
+    <div class="glass rounded-xl p-4 relative overflow-hidden border-l-2 ${pos.side === 'LONG' ? 'border-l-neon-green' : 'border-l-neon-red'}">
+    <div class="flex justify-between items-start mb-2">
           <div><h4 class="font-bold text-white text-lg tracking-wide">${pos.symbol}</h4><span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">${pos.side}</span></div>
           <div class="text-right"><p class="text-[10px] text-slate-400 uppercase tracking-wider">Entry</p><p class="font-mono text-sm text-white">${Number(pos.entry_price).toFixed(4)}</p></div>
         </div>
-        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-700/50">
-           <div><p class="text-[10px] text-slate-500 uppercase">Target</p><p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p></div>
-           <div class="text-right"><p class="text-[10px] text-slate-500 uppercase">Stop</p><p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p></div>
+        <div class="flex justify-between items-end mt-3 pt-3 border-t border-slate-700/50">
+        <div class="flex gap-4">
+        <div>
+           <p class="text-[10px] text-slate-500 uppercase">Target</p>
+           <p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p>
         </div>
-        <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="absolute bottom-2 right-2 text-[10px] font-bold text-neon-red border border-neon-red/30 px-2 py-1 rounded hover:bg-neon-red/10 active:scale-95 transition-all">CLOSE</button>
-      </div>
+        <div>
+           <p class="text-[10px] text-slate-500 uppercase">Stop</p>
+           <p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p>
+       </div>
+       </div>
+       <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[10px] font-bold text-neon-red border border-neon-red/30 px-3 py-1.5 rounded hover:bg-neon-red/10 active:scale-95 transition-all bg-[rgba(255,0,60,0.05)] mb-0.5">CLOSE</button>
+       </div>
     `).join('');
   }
 
