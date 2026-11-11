@@ -7,7 +7,7 @@ except ImportError:
     pass
 
 APP_NAME = "AI QUANT X"
-APP_VERSION = "4.1.0"
+APP_VERSION = "5.0.0"
 PAPER_MODE = True
 TRADING_MODE = "PAPER SIMULATION"
 
@@ -15,7 +15,7 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 DB_PATH = os.getenv("DB_PATH", "/data/ai_quant_x.db")
 
-BINANCE_SPOT_BASE_URL = "https://data-api.binance.vision"
+BINANCE_SPOT_BASE_URL = "https://api.binance.com"
 BINANCE_FUTURES_BASE_URL = "https://fapi.binance.com"
 SPOT_EXCHANGE_INFO_PATH = "/api/v3/exchangeInfo"
 FUTURES_EXCHANGE_INFO_PATH = "/fapi/v1/exchangeInfo"
@@ -23,6 +23,8 @@ SPOT_KLINES_PATH = "/api/v3/klines"
 FUTURES_KLINES_PATH = "/fapi/v1/klines"
 SPOT_TICKER_24H_PATH = "/api/v3/ticker/24hr"
 FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
+SPOT_PRICE_PATH = "/api/v3/ticker/price"
+FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT"
@@ -44,6 +46,33 @@ MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 3
 MIN_SIGNAL_SCORE = 65
 SIGNAL_COOLDOWN_SECONDS = 3600
+POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
+
+# Strategy layer
+STRATEGIES = tuple(s.strip() for s in os.getenv(
+    "STRATEGIES", "trend,mean_reversion,breakout").split(",") if s.strip())
+HIGH_VOL_PERCENTILE = 95          # ATR percentile above which no new entries are opened
+TREND_ADX_MIN = 22
+RANGE_ADX_MAX = 20
+
+# Trade management
+TRAILING_ENABLED = os.getenv("TRAILING_ENABLED", "true").lower() == "true"
+BREAKEVEN_AT_R = 1.0              # move stop to entry (+fees) after 1R of profit
+TRAIL_START_R = 1.5               # start trailing after 1.5R of profit
+TRAIL_DISTANCE_R = 1.0            # trailing stop distance, in multiples of initial risk
+
+# Portfolio protection
+MAX_CONSECUTIVE_LOSSES = 4
+LOSS_STREAK_PAUSE_SECONDS = 6 * 3600
+MAX_DRAWDOWN_PCT = 15.0
+DRAWDOWN_PAUSE_SECONDS = 24 * 3600
+
+# Backtest
+BACKTEST_CANDLES = int(os.getenv("BACKTEST_CANDLES", "2000"))
+BACKTEST_INTERVAL = "1h"
+
+# Dashboard protection (empty = open)
+DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
 RISK_PER_TRADE_PCT = 0.5
