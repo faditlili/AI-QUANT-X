@@ -1,4 +1,4 @@
-"""Asynchronous paper-simulation engine."""
+"""Asynchronous paper-simulation engine with Correlation Matrix."""
 import asyncio, logging, time
 import config
 from market_data import MarketData
@@ -7,6 +7,7 @@ from strategies import select_signal
 from risk_manager import RiskManager
 from paper_trading import PaperTrader
 from news_engine import NewsEngine
+from correlation import is_highly_correlated
 
 log=logging.getLogger(__name__)
 
@@ -64,14 +65,35 @@ class Engine:
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate}
              
         result=select_signal(ctx)
-        self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
+        
+        # 1. فحص الإشارة الأساسية
         if self.paused or result["action"]=="HOLD":
+            self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
             return
+            
+        # 2. فحص الكولداون
         if time.time()-float(self.db.get_state(f"cooldown:{source}:{symbol}","0")) < config.SIGNAL_COOLDOWN_SECONDS:
             return
+
+        # 3. فحص مصفوفة الارتباط (جديد)
+        open_positions = self.db.get_open_positions()
+        open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
+        
+        if open_symbols:
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market)
+            if is_corr:
+                self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
+                log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
+                return
+        
+        # إذا اجتاز كل الفحوصات، نضيف القرار للفتح
+        self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
+        
+        # 4. فتح الصفقة
         opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
                  {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"]},
                  stop_mult=result["stop_mult"],rr=result["rr"],strategy=result["strategy"])
+                 
         if opened.get("success"):
             self.db.set_state(f"cooldown:{source}:{symbol}",time.time())
             log.info("Paper position opened: %s %s %s (%s)",source,symbol,result["side"],result["strategy"])
