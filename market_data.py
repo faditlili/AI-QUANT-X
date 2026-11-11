@@ -122,12 +122,13 @@ class MarketData:
         if len(frame) < config.MIN_CANDLES_REQUIRED:
             raise MarketDataError("Not enough completed candles")
         return frame
-        async def get_last_prices(self, source="futures"):
+    async def get_last_prices(self, source="futures"):
         """Lightweight last-price snapshot for fast position monitoring."""
         raw = await self._get(source, self._path(source, "price"))
         if isinstance(raw, dict):
             raw = [raw]
-        return {x["symbol"]: {"last_price": float(x["price"])}
+        return {
+            x["symbol"]: {"last_price": float(x["price"])}
                 for x in raw if x.get("symbol") and x.get("price")}
     async def get_tickers_24h(self, source="futures"):
         raw = await self._get(source, self._path(source, "ticker"))
