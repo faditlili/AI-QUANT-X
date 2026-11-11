@@ -42,16 +42,10 @@ async def dashboard():
     .ticker { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
     @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
     
-    /* Custom Scrollbar for Market Watch */
+    /* Custom Scrollbar */
     .custom-scroll::-webkit-scrollbar { width: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
-    
-    /* Flash animation for price updates */
-    .flash-green { animation: flashG 0.5s; }
-    .flash-red { animation: flashR 0.5s; }
-    @keyframes flashG { 0% { background-color: rgba(0,255,102,0.3); } 100% { background-color: transparent; } }
-    @keyframes flashR { 0% { background-color: rgba(255,0,60,0.3); } 100% { background-color: transparent; } }
   </style>
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
@@ -66,7 +60,7 @@ async def dashboard():
       </div>
     </header>
 
-    <!-- Live Ticker (Top 10) -->
+    <!-- Live Ticker -->
     <div class="ticker-wrap mb-6 py-2">
       <div class="ticker" id="ticker-content">
         <span class="mx-4 font-mono text-sm text-slate-400">Connecting to Binance...</span>
@@ -108,7 +102,7 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Market Watch Grid (All 30 Symbols) -->
+    <!-- Market Watch Grid -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">MARKET WATCH</h3>
@@ -125,7 +119,7 @@ async def dashboard():
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
         <span id="pos-count" class="text-xs text-slate-500 font-mono">0 Open</span>
       </div>
-      <div id="active-positions-list" class="space-y-3"></div>
+      <div id="active-positions-list"></div>
     </section>
 
     <!-- Neural Logs -->
@@ -218,16 +212,16 @@ async function loadLiveTickers() {
         const res = await fetch('/api/live_tickers');
         const data = await res.json();
         if(data.length > 0) {
-            // 1. Update Top Ticker (Top 10)
+            // Top Ticker
             let top10 = data.slice(0, 10);
             let tickerHtml = top10.map(d => {
                 const color = d.change >= 0 ? 'text-neon-green' : 'text-neon-red';
                 const sign = d.change >= 0 ? '+' : '';
                 return `<span class="mx-4 font-mono text-sm"><span class="text-slate-300 font-bold">${d.symbol}</span> <span class="text-white">$${fmt(d.price)}</span> <span class="${color}">${sign}${d.change}%</span></span>`;
             }).join('');
-            document.getElementById('ticker-content').innerHTML = tickerHtml + tickerHtml; // Duplicate for seamless scrolling
+            document.getElementById('ticker-content').innerHTML = tickerHtml + tickerHtml;
 
-            // 2. Update Market Watch Grid (All 30)
+            // Market Watch Grid
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
                 const isUp = d.change >= 0;
@@ -277,31 +271,42 @@ async function load(){
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = perf.profit_factor ? fmt(perf.profit_factor) : '0.00';
 
-  // Active Positions
+  // Active Positions (Fixed Layout)
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
+  
   if(ps.length === 0) {
     posContainer.innerHTML = '<div class="text-center text-slate-500 text-sm py-4 glass rounded-xl">No active positions</div>';
   } else {
     posContainer.innerHTML = ps.map(pos => `
-    <div class="glass rounded-xl p-4 relative overflow-hidden border-l-2 ${pos.side === 'LONG' ? 'border-l-neon-green' : 'border-l-neon-red'}">
-    <div class="flex justify-between items-start mb-2">
-          <div><h4 class="font-bold text-white text-lg tracking-wide">${pos.symbol}</h4><span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">${pos.side}</span></div>
-          <div class="text-right"><p class="text-[10px] text-slate-400 uppercase tracking-wider">Entry</p><p class="font-mono text-sm text-white">${Number(pos.entry_price).toFixed(4)}</p></div>
+      <div class="glass rounded-xl p-4 mb-3 border-l-2 ${pos.side === 'LONG' ? 'border-l-neon-green' : 'border-l-neon-red'}">
+        <!-- Top Row -->
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <h4 class="font-bold text-white text-lg tracking-wide">${pos.symbol}</h4>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">${pos.side}</span>
+          </div>
+          <div class="text-right">
+            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Entry</p>
+            <p class="font-mono text-sm text-white">${Number(pos.entry_price).toFixed(4)}</p>
+          </div>
         </div>
-        <div class="flex justify-between items-end mt-3 pt-3 border-t border-slate-700/50">
-        <div class="flex gap-4">
-        <div>
-           <p class="text-[10px] text-slate-500 uppercase">Target</p>
-           <p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p>
+        
+        <!-- Bottom Row -->
+        <div class="flex justify-between items-center pt-3 border-t border-slate-700/50">
+           <div class="flex gap-4">
+               <div>
+                   <p class="text-[10px] text-slate-500 uppercase">Target</p>
+                   <p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p>
+               </div>
+               <div>
+                   <p class="text-[10px] text-slate-500 uppercase">Stop</p>
+                   <p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p>
+               </div>
+           </div>
+           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[10px] font-bold text-neon-red border border-neon-red/30 px-3 py-1.5 rounded hover:bg-neon-red/10 active:scale-95 transition-all bg-[rgba(255,0,60,0.05)]">CLOSE</button>
         </div>
-        <div>
-           <p class="text-[10px] text-slate-500 uppercase">Stop</p>
-           <p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p>
-       </div>
-       </div>
-       <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[10px] font-bold text-neon-red border border-neon-red/30 px-3 py-1.5 rounded hover:bg-neon-red/10 active:scale-95 transition-all bg-[rgba(255,0,60,0.05)] mb-0.5">CLOSE</button>
-       </div>
+      </div>
     `).join('');
   }
 
@@ -344,7 +349,6 @@ async function load(){
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', displayColors: false, callbacks: { label: function(context) { return '$' + fmt(context.parsed.y); } } } }, scales: { x: { display: false }, y: { display: false, grace: '15%' } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
     });
   } else {
-     chartInstance.data.datasets[0].data[chartInstance.datasets ? 0 : 0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity; // Fix potential bug
      chartInstance.data.datasets[0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity;
      chartInstance.update('none'); 
   }
@@ -374,14 +378,11 @@ async def performance(request:Request): return request.app.state.db.get_performa
 @router.get("/api/decisions")
 async def decisions(request:Request): return request.app.state.db.get_recent_decisions()
 
-# --- Live Tickers Endpoint (Returns All 30) ---
 @router.get("/api/live_tickers")
 async def live_tickers(request: Request):
     try:
         market = request.app.state.engine.market
         tickers = await market.get_tickers_24h("futures")
-        
-        # جلب قائمة العملات الـ 30 من ملف الإعدادات
         symbols = list(config.SYMBOLS)
         out = []
         for s in symbols:
