@@ -1,289 +1,271 @@
-"""Nexus v2 UI with Smooth Binance-Style Chart."""
+"""Ultimate Mobile-First Trading Dashboard with Controls."""
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 router=APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard():
+    # باستخدام Tailwind CSS لتصميم متجاوب وسريع
     return HTMLResponse("""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI QUANT X · NEXUS V2</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-:root {
-  --bg: #03040a;
-  --panel-bg: rgba(10, 15, 30, 0.7);
-  --border: rgba(0, 243, 255, 0.15);
-  --neon-cyan: #00f3ff;
-  --neon-purple: #b026ff;
-  --neon-green: #00ff66;
-  --neon-red: #ff003c;
-  --text-main: #e0f7fa;
-  --text-muted: #6b7a99;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Share Tech Mono', monospace;
-  background-color: var(--bg);
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.05) 0%, transparent 50%),
-    linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px);
-  background-size: 100% 100%, 40px 40px, 40px 40px;
-  color: var(--text-main);
-  min-height: 100vh;
-  padding: 1.5rem;
-  overflow-x: hidden;
-}
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>AI QUANT X · NEXUS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { bg: '#03040a', card: '#0a0f1e', border: '#1e293b' },
+            neon: { cyan: '#00f3ff', green: '#00ff66', red: '#ff003c', purple: '#b026ff' }
+          },
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #03040a; background-image: radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.05) 0%, transparent 50%), linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; }
+    .glass { background: rgba(10, 15, 30, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(0, 243, 255, 0.15); }
+    .neon-glow { text-shadow: 0 0 10px currentColor; }
+    .scanline { position: relative; overflow: hidden; }
+    .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 3s linear infinite; }
+    @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
+    /* Custom Scrollbar for mobile */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+  </style>
+</head>
+<body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
 
-/* Header */
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
-h1 { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 2.2rem; letter-spacing: 3px; color: #fff; text-shadow: 0 0 15px var(--neon-cyan), 0 0 30px var(--neon-cyan); }
-h1 span { color: var(--neon-purple); text-shadow: 0 0 15px var(--neon-purple); }
-.status-badge { border: 1px solid var(--neon-green); color: var(--neon-green); padding: 6px 16px; border-radius: 4px; font-size: 0.9rem; box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); display: flex; align-items: center; gap: 10px; background: rgba(0, 255, 102, 0.05); font-family: 'Orbitron', sans-serif;}
-.dot { width: 8px; height: 8px; background: var(--neon-green); border-radius: 50%; box-shadow: 0 0 10px var(--neon-green); animation: pulse 1.5s infinite; }
+  <div class="max-w-md mx-auto px-4 pt-6">
+    
+    <!-- Header -->
+    <header class="flex justify-between items-center mb-6">
+      <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
+      <button id="pause-btn" onclick="togglePause()" class="px-4 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-green text-neon-green shadow-[0_0_10px_rgba(0,255,102,0.2)] bg-[rgba(0,255,102,0.05)]">
+        ● ACTIVE
+      </button>
+    </header>
 
-/* Grids */
-.grid-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.grid-mid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
-@media (max-width: 900px) { .grid-mid { grid-template-columns: 1fr; } }
+    <!-- Balance Section -->
+    <section class="text-center mb-8">
+      <p class="text-slate-400 text-xs uppercase tracking-widest mb-1 font-mono">Total Estimated Value (USDT)</p>
+      <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
+      <div id="pnl-display" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-slate-800/50">
+        <span id="pnl-value" class="text-slate-400">+0.00 USDT</span>
+        <span id="pnl-percent" class="text-slate-500 text-xs">(0.00%)</span>
+      </div>
+    </section>
 
-/* Cards */
-.card {
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1.2rem;
-  backdrop-filter: blur(15px);
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
-}
-.card:hover { border-color: rgba(0, 243, 255, 0.4); box-shadow: 0 0 20px rgba(0, 243, 255, 0.1); }
-.card::before {
-  content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
-  animation: scanline 4s linear infinite;
-}
-.card-title { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 0.5rem; }
-.card-value { font-size: 1.8rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
-.cyan { color: var(--neon-cyan); }
-.green { color: var(--neon-green); }
-.red { color: var(--neon-red); }
-.purple { color: var(--neon-purple); }
+    <!-- Chart Section -->
+    <section class="glass rounded-2xl p-4 mb-6 scanline shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+      <div class="flex justify-between items-center mb-2">
+         <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
+         <span class="text-[10px] text-slate-500 font-mono">LIVE TELEMETRY</span>
+      </div>
+      <div class="h-48 w-full relative">
+        <canvas id="equityChart"></canvas>
+      </div>
+    </section>
 
-/* Tables */
-.table-wrapper { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-.table-title { font-family: 'Orbitron', sans-serif; padding: 1rem 1.2rem; background: rgba(0, 243, 255, 0.05); color: var(--neon-cyan); border-bottom: 1px solid var(--border); font-size: 0.9rem; display: flex; justify-content: space-between;}
-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
-th { padding: 0.8rem 1.2rem; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; }
-td { padding: 0.8rem 1.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); }
-tr:hover td { background: rgba(0, 243, 255, 0.03); }
-tr.win-row:hover td { background: rgba(0, 255, 102, 0.05); }
-tr.loss-row:hover td { background: rgba(255, 0, 60, 0.05); }
+    <!-- Quick Stats Grid -->
+    <section class="grid grid-cols-2 gap-3 mb-6">
+      <div class="glass rounded-xl p-3 scanline">
+        <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
+        <p id="winrate" class="font-mono text-xl text-neon-purple font-bold neon-glow">--%</p>
+      </div>
+      <div class="glass rounded-xl p-3 scanline">
+        <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Profit Factor</p>
+        <p id="pf" class="font-mono text-xl text-neon-purple font-bold neon-glow">--</p>
+      </div>
+    </section>
 
-/* Badges */
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-.badge-long { border: 1px solid var(--neon-green); color: var(--neon-green); background: rgba(0, 255, 102, 0.1); }
-.badge-short { border: 1px solid var(--neon-red); color: var(--neon-red); background: rgba(255, 0, 60, 0.1); }
-.badge-hold { border: 1px solid var(--text-muted); color: var(--text-muted); }
-.badge-win { color: var(--neon-green); text-shadow: 0 0 8px var(--neon-green); }
-.badge-loss { color: var(--neon-red); text-shadow: 0 0 8px var(--neon-red); }
+    <!-- Active Positions -->
+    <section class="mb-6">
+      <div class="flex justify-between items-end mb-3">
+        <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
+        <span id="pos-count" class="text-xs text-slate-500 font-mono">0 Open</span>
+      </div>
+      <div id="active-positions-list" class="space-y-3">
+        <!-- Position Cards Injected Here -->
+        <div class="text-center text-slate-500 text-sm py-4 glass rounded-xl">Scanning network...</div>
+      </div>
+    </section>
 
-/* Chart Container */
-.chart-container { 
-  background: var(--panel-bg); 
-  border: 1px solid rgba(176, 38, 255, 0.2); 
-  border-radius: 8px; 
-  padding: 1.2rem; 
-  position: relative;
-  height: 350px; /* تثبيت الارتفاع لمنع التمدد */
-  min-height: 350px; 
-}
-.chart-container h2 { font-family: 'Orbitron', sans-serif; color: var(--neon-purple); font-size: 0.9rem; margin-bottom: 1rem; text-shadow: 0 0 5px var(--neon-purple); letter-spacing: 1px;}
-.chart-container canvas { max-height: 280px; }
+    <!-- Recent Trades (History) -->
+    <section class="mb-6">
+      <div class="flex justify-between items-end mb-3">
+        <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">RECENT TRADES</h3>
+      </div>
+      <div id="history-list" class="space-y-2">
+        <!-- History Cards Injected Here -->
+      </div>
+    </section>
 
-@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes scanline { 0% { left: -100%; } 100% { left: 100%; } }
-</style></head>
-<body>
-
-<div class="header">
-  <h1>AI QUANT <span>X</span></h1>
-  <div class="status-badge"><div class="dot"></div> NEXUS v2.0 ONLINE</div>
-</div>
-
-<!-- Top Stats -->
-<section class="grid-top">
-  <div class="card"><div class="card-title">Virtual Equity</div><div class="card-value cyan" id="equity">—</div></div>
-  <div class="card"><div class="card-title">Cash Balance</div><div class="card-value" id="cash">—</div></div>
-  <div class="card"><div class="card-title">Unrealized PnL</div><div class="card-value" id="unrealized">—</div></div>
-  <div class="card"><div class="card-title">Realized PnL</div><div class="card-value" id="realized">—</div></div>
-  <div class="card"><div class="card-title">Win Rate</div><div class="card-value purple" id="winrate">—</div></div>
-  <div class="card"><div class="card-title">Profit Factor</div><div class="card-value purple" id="pf">—</div></div>
-</section>
-
-<!-- Chart & Active Positions -->
-<div class="grid-mid">
-  <div class="chart-container">
-    <h2>EQUITY CURVE // LIVE TELEMETRY</h2>
-    <canvas id="equityChart"></canvas>
   </div>
-  
-  <div class="card" style="border-color: rgba(0, 255, 102, 0.3);">
-    <div class="card-title" style="color:var(--neon-green);">Open Risk Status</div>
-    <div class="card-value green" id="risk" style="font-size:1.5rem; margin-bottom:1rem;">—</div>
-    <div style="font-size:0.8rem; color:var(--text-muted);">Capital at risk across active simulated positions.</div>
-  </div>
-</div>
-
-<!-- Active Positions -->
-<div class="table-wrapper">
-  <div class="table-title">ACTIVE POSITIONS</div>
-  <table>
-    <thead><tr><th>Asset</th><th>Side</th><th>Qty</th><th>Entry</th><th>Stop</th><th>Target</th><th>Strategy</th></tr></thead>
-    <tbody id="positions-body"><tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Scanning network...</td></tr></tbody>
-  </table>
-</div>
-
-<!-- Trade History (Wins & Losses) -->
-<div class="table-wrapper" style="border-color: rgba(176, 38, 255, 0.3);">
-  <div class="table-title" style="color:var(--neon-purple); background:rgba(176, 38, 255, 0.05);">TRADE HISTORY // WINS & LOSSES</div>
-  <table>
-    <thead><tr><th>Time Closed</th><th>Asset</th><th>Side</th><th>Entry</th><th>Exit</th><th>Net PnL (USDT)</th><th>Reason</th></tr></thead>
-    <tbody id="history-body"><tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Loading history matrix...</td></tr></tbody>
-  </table>
-</div>
-
-<!-- Recent Decisions -->
-<div class="table-wrapper">
-  <div class="table-title">AI NEURAL DECISION LOG</div>
-  <table>
-    <thead><tr><th>Time</th><th>Asset</th><th>Action</th><th>Score</th><th>Reasoning</th></tr></thead>
-    <tbody id="decisions-body"><tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Loading logs...</td></tr></tbody>
-  </table>
-</div>
 
 <script>
 let chartInstance = null;
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+// --- INTERACTIVE CONTROLS ---
+async function togglePause() {
+    const btn = document.getElementById('pause-btn');
+    btn.innerHTML = '...';
+    try {
+        const res = await fetch('/api/toggle_pause', { method: 'POST' });
+        const data = await res.json();
+        updatePauseButton(data.paused);
+    } catch(e) {
+        console.error(e);
+        btn.innerHTML = 'ERR';
+    }
+}
+
+function updatePauseButton(isPaused) {
+    const btn = document.getElementById('pause-btn');
+    if (isPaused) {
+        btn.className = "px-4 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-red text-neon-red shadow-[0_0_10px_rgba(255,0,60,0.2)] bg-[rgba(255,0,60,0.05)]";
+        btn.innerHTML = '■ PAUSED';
+    } else {
+        btn.className = "px-4 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-green text-neon-green shadow-[0_0_10px_rgba(0,255,102,0.2)] bg-[rgba(0,255,102,0.05)]";
+        btn.innerHTML = '● ACTIVE';
+    }
+}
+
+async function closePosition(id, symbol) {
+    if(!confirm(`Are you sure you want to close ${symbol}?`)) return;
+    try {
+        const res = await fetch(`/api/close_position/${id}`, { method: 'POST' });
+        const data = await res.json();
+        if(data.success) {
+            load(); // Refresh UI immediately
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch(e) { alert("Failed to close position."); }
+}
+
+// --- MAIN DATA FETCHING ---
 async function load(){
  try{
-  const [p, r, ps, ds, trades, perf] = await Promise.all([
+  const [p, r, ps, trades, perf, status] = await Promise.all([
       fetch('/api/portfolio').then(y=>y.json()),
       fetch('/api/risk').then(y=>y.json()),
       fetch('/api/positions').then(y=>y.json()),
-      fetch('/api/decisions').then(y=>y.json()),
       fetch('/api/trades').then(y=>y.json()),
-      fetch('/api/performance').then(y=>y.json())
+      fetch('/api/performance').then(y=>y.json()),
+      fetch('/api/status').then(y=>y.json())
   ]);
   
-  // 1. Update Top Stats
-  document.getElementById('equity').textContent = fmt(p.equity) + ' USDT';
-  document.getElementById('cash').textContent = fmt(p.cash_balance) + ' USDT';
+  // 1. Update Header & Balance
+  updatePauseButton(status.paused);
+  document.getElementById('total-equity').textContent = fmt(p.equity);
   
-  const unrl = document.getElementById('unrealized');
-  unrl.textContent = fmt(p.unrealized_pnl) + ' USDT';
-  unrl.className = 'card-value ' + (p.unrealized_pnl > 0 ? 'green' : p.unrealized_pnl < 0 ? 'red' : '');
-
-  const rl = document.getElementById('realized');
-  rl.textContent = fmt(p.realized_pnl) + ' USDT';
-  rl.className = 'card-value ' + (p.realized_pnl > 0 ? 'green' : p.realized_pnl < 0 ? 'red' : '');
+  const pnlVal = p.unrealized_pnl + p.realized_pnl;
+  const pnlPercent = (pnlVal / 200) * 100;
+  const pnlDisplay = document.getElementById('pnl-display');
+  const pnlValue = document.getElementById('pnl-value');
+  const pnlPercentEl = document.getElementById('pnl-percent');
+  
+  pnlValue.textContent = `${pnlVal >= 0 ? '+' : ''}${fmt(pnlVal)} USDT`;
+  pnlPercentEl.textContent = `(${pnlVal >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
+  
+  if (pnlVal > 0) {
+      pnlDisplay.className = "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.2)]";
+  } else if (pnlVal < 0) {
+      pnlDisplay.className = "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.2)]";
+  }
 
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = perf.profit_factor ? fmt(perf.profit_factor) : '0.00';
-  document.getElementById('risk').textContent = fmt(r.open_risk) + ' / ' + fmt(r.risk_cap) + ' USDT';
 
-  // 2. Active Positions
-  const pb = document.getElementById('positions-body');
+  // 2. Render Active Positions (Cards)
+  const posContainer = document.getElementById('active-positions-list');
+  document.getElementById('pos-count').textContent = `${ps.length} Open`;
+  
   if(ps.length === 0) {
-    pb.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No active positions.</td></tr>';
+    posContainer.innerHTML = '<div class="text-center text-slate-500 text-sm py-4 glass rounded-xl">No active positions</div>';
   } else {
-    pb.innerHTML = ps.map(pos => `
-      <tr>
-        <td style="color:var(--neon-cyan); font-weight:bold;">${pos.symbol}</td>
-        <td><span class="badge ${pos.side === 'LONG' ? 'badge-long' : 'badge-short'}">${pos.side}</span></td>
-        <td>${Number(pos.quantity).toFixed(4)}</td>
-        <td>${Number(pos.entry_price).toFixed(4)}</td>
-        <td style="color:var(--neon-red);">${Number(pos.stop_price).toFixed(4)}</td>
-        <td style="color:var(--neon-green);">${Number(pos.target_price).toFixed(4)}</td>
-        <td style="color:var(--neon-purple); font-size:0.8rem;">${pos.strategy || 'N/A'}</td>
-      </tr>
+    posContainer.innerHTML = ps.map(pos => `
+      <div class="glass rounded-xl p-4 relative overflow-hidden border-l-2 ${pos.side === 'LONG' ? 'border-l-neon-green' : 'border-l-neon-red'}">
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h4 class="font-bold text-white text-lg tracking-wide">${pos.symbol}</h4>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">${pos.side}</span>
+          </div>
+          <div class="text-right">
+            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Entry</p>
+            <p class="font-mono text-sm text-white">${Number(pos.entry_price).toFixed(4)}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-700/50">
+           <div>
+             <p class="text-[10px] text-slate-500 uppercase">Target</p>
+             <p class="font-mono text-xs text-neon-green">${Number(pos.target_price).toFixed(4)}</p>
+           </div>
+           <div class="text-right">
+             <p class="text-[10px] text-slate-500 uppercase">Stop</p>
+             <p class="font-mono text-xs text-neon-red">${Number(pos.stop_price).toFixed(4)}</p>
+           </div>
+        </div>
+        <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="absolute top-2 right-2 text-[10px] font-bold text-neon-red border border-neon-red/30 px-2 py-1 rounded hover:bg-neon-red/10 active:scale-95 transition-all">CLOSE</button>
+      </div>
     `).join('');
   }
 
-  // 3. Trade History (Wins & Losses)
-  const hb = document.getElementById('history-body');
-  const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 15);
+  // 3. Render History (Wins/Losses List)
+  const histContainer = document.getElementById('history-list');
+  const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 8); // Last 8
   
   if(closedTrades.length === 0) {
-    hb.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No closed trades yet.</td></tr>';
+    histContainer.innerHTML = '<div class="text-center text-slate-500 text-sm py-2">No recent trades</div>';
   } else {
-    hb.innerHTML = closedTrades.map(t => {
+    histContainer.innerHTML = closedTrades.map(t => {
       const isWin = t.net_pnl > 0;
-      const pnlClass = isWin ? 'badge-win' : 'badge-loss';
-      const rowClass = isWin ? 'win-row' : 'loss-row';
-      const time = new Date(t.closed_at).toLocaleTimeString();
-      
       return `
-        <tr class="${rowClass}">
-          <td style="color:var(--text-muted); font-size:0.8rem;">${time}</td>
-          <td style="font-weight:bold;">${t.symbol}</td>
-          <td><span class="badge ${t.side === 'LONG' ? 'badge-long' : 'badge-short'}">${t.side}</span></td>
-          <td>${Number(t.entry_price).toFixed(4)}</td>
-          <td>${Number(t.exit_price).toFixed(4)}</td>
-          <td class="${pnlClass}" style="font-weight:bold; font-size:1.1rem;">${isWin ? '+' : ''}${fmt(t.net_pnl)}</td>
-          <td style="font-size:0.8rem; color:var(--text-muted);">${t.exit_reason}</td>
-        </tr>
+        <div class="glass rounded-lg p-3 flex justify-between items-center">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${isWin ? 'bg-[rgba(0,255,102,0.1)] text-neon-green' : 'bg-[rgba(255,0,60,0.1)] text-neon-red'}">
+              ${t.side === 'LONG' ? 'L' : 'S'}
+            </div>
+            <div>
+              <p class="font-bold text-sm text-slate-200">${t.symbol}</p>
+              <p class="text-[10px] text-slate-500">${new Date(t.closed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="font-mono text-sm font-bold ${isWin ? 'text-neon-green' : 'text-neon-red'}">${isWin ? '+' : ''}${fmt(t.net_pnl)}</p>
+            <p class="text-[9px] text-slate-500 uppercase">${t.exit_reason}</p>
+          </div>
+        </div>
       `;
     }).join('');
   }
 
-  // 4. Decisions
-  const db = document.getElementById('decisions-body');
-  if(ds.length === 0) {
-    db.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No logs available.</td></tr>';
-  } else {
-    db.innerHTML = ds.slice(0, 8).map(d => {
-      const time = new Date(d.created_at).toLocaleTimeString();
-      let badgeClass = 'badge-hold';
-      if(d.action.includes('BUY')) badgeClass = 'badge-long';
-      if(d.action.includes('SHORT')) badgeClass = 'badge-short';
-      return `
-        <tr>
-          <td style="color:var(--text-muted); font-size:0.8rem;">${time}</td>
-          <td style="font-weight:bold;">${d.symbol}</td>
-          <td><span class="badge ${badgeClass}">${d.action}</span></td>
-          <td class="purple">${d.score}</td>
-          <td style="font-size:0.8rem; color:var(--text-muted); max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${d.reason}">${d.reason}</td>
-        </tr>
-      `;
-    }).join('');
-  }
-
-  // 5. Chart Rendering (Smooth Binance-Style Curve)
+  // 4. Chart Rendering (Smooth Curve)
   if(!chartInstance) {
     const ctx = document.getElementById('equityChart').getContext('2d');
-    
-    // تدرج لوني نيون (Cyan) يختفي في الأسفل
-    let gradient = ctx.createLinearGradient(0, 0, 0, 280);
-    gradient.addColorStop(0, 'rgba(0, 243, 255, 0.4)'); 
+    let gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, 'rgba(0, 243, 255, 0.5)'); 
     gradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
 
-    // بناء البيانات من الصفقات
     let sortedTrades = trades.filter(t => t.status === 'CLOSED').reverse();
     let labels = ['Start'];
-    let data = [200]; // الرصيد الابتدائي
+    let data = [200]; 
     
     sortedTrades.forEach((t, index) => {
         labels.push('T' + (index+1));
         data.push(data[data.length-1] + (Number(t.net_pnl) || 0));
     });
     
-    // إضافة الرصيد الحالي
     labels.push('Live');
     data.push(p.equity);
 
@@ -292,16 +274,15 @@ async function load(){
         data: {
             labels: labels,
             datasets: [{
-                label: 'Equity',
                 data: data,
-                borderColor: '#00f3ff', // لون الخط (سماوي نيون)
-                backgroundColor: gradient, // التدرج اللوني تحته
-                borderWidth: 3,
-                pointRadius: 0, // إخفاء النقاط لجعله خطاً ناعماً
-                pointHoverRadius: 6,
+                borderColor: '#00f3ff',
+                backgroundColor: gradient,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 4,
                 pointBackgroundColor: '#00f3ff',
                 fill: true,
-                tension: 0.4 // هذا هو السطر السحري الذي يجعل الخط "مموجاً" وناعماً
+                tension: 0.4
             }]
         },
         options: {
@@ -314,27 +295,19 @@ async function load(){
                     intersect: false, 
                     backgroundColor: 'rgba(0,0,0,0.8)', 
                     titleColor: '#00f3ff',
-                    displayColors: false
+                    bodyColor: '#fff',
+                    displayColors: false,
+                    callbacks: { label: function(context) { return '$' + fmt(context.parsed.y); } }
                 } 
             },
             scales: {
-                x: { 
-                    display: false // إخفاء المحور السيني (مثل بينانس)
-                },
-                y: { 
-                    display: false, // إخفاء المحور الصادي (مثل بينانس)
-                    grace: '15%' // إعطاء هامش علوي وسفلي للرسم
-                }
+                x: { display: false },
+                y: { display: false, grace: '15%' }
             },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
         }
     });
   } else {
-     // تحديث النقطة الأخيرة بصمت دون إعادة رسم كامل
      chartInstance.data.datasets[0].data[chartInstance.data.datasets[0].data.length - 1] = p.equity;
      chartInstance.update('none'); 
   }
@@ -342,38 +315,52 @@ async function load(){
  }catch(e){ console.error('System Error:', e); }
 }
 
-load(); setInterval(load, 5000);
-</script></body></html>""")
+load(); setInterval(load, 3000); // تحديث أسرع (كل 3 ثوانٍ)
+</script>
+</body>
+</html>""")
 
-# (باقي المسارات API كما هي)
+# --- API ENDPOINTS ---
 @router.get("/api/status")
-async def status(request:Request):
-    return request.app.state.engine.get_status()
-
+async def status(request:Request): return request.app.state.engine.get_status()
 @router.get("/api/portfolio")
-async def portfolio(request:Request):
-    return request.app.state.db.get_portfolio()
-
+async def portfolio(request:Request): return request.app.state.db.get_portfolio()
 @router.get("/api/risk")
-async def risk(request:Request):
-    return request.app.state.engine.risk.get_risk_status()
-
+async def risk(request:Request): return request.app.state.engine.risk.get_risk_status()
 @router.get("/api/positions")
-async def positions(request:Request):
-    return request.app.state.db.get_open_positions()
-
+async def positions(request:Request): return request.app.state.db.get_open_positions()
 @router.get("/api/trades")
-async def trades(request:Request):
-    return request.app.state.db.get_recent_trades()
-
+async def trades(request:Request): return request.app.state.db.get_recent_trades()
 @router.get("/api/performance")
-async def performance(request:Request):
-    return request.app.state.db.get_performance()
-
+async def performance(request:Request): return request.app.state.db.get_performance()
 @router.get("/api/decisions")
-async def decisions(request:Request):
-    return request.app.state.db.get_recent_decisions()
+async def decisions(request:Request): return request.app.state.db.get_recent_decisions()
 
-@router.get("/api/strategies")
-async def strategies(request:Request):
-    return request.app.state.db.get_performance_by_strategy()
+# --- NEW CONTROL ENDPOINTS ---
+@router.post("/api/toggle_pause")
+async def toggle_pause(request:Request):
+    engine = request.app.state.engine
+    engine.set_paused(not engine.paused)
+    return {"success": True, "paused": engine.paused}
+
+@router.post("/api/close_position/{pos_id}")
+async def close_position(request:Request, pos_id: int):
+    try:
+        db = request.app.state.db
+        engine = request.app.state.engine
+        pos = db.get_position(pos_id)
+        if not pos or pos["status"] != "OPEN":
+            return JSONResponse({"success": False, "error": "Position not found or already closed"}, status_code=400)
+        
+        # Get current market price for the symbol
+        prices = await engine.market.get_last_prices(pos["source"])
+        if pos["symbol"] not in prices:
+            return JSONResponse({"success": False, "error": "Could not fetch current price"}, status_code=400)
+        
+        current_price = prices[pos["symbol"]]["last_price"]
+        
+        # Close the position
+        engine.trader.close_position(pos_id, current_price, "MANUAL_UI")
+        return {"success": True}
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
