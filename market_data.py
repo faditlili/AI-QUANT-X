@@ -17,6 +17,15 @@ class MarketData:
         self.sem = asyncio.Semaphore(config.MAX_CONCURRENT_REQUESTS)
         self._metadata = {}
 
+    async def get_funding_rate(self, symbol, source="futures"):
+       if source != "futures":
+        return 0.0
+    try:
+        raw = await self._get(source, "/fapi/v1/premiumIndex", {"symbol": symbol.upper()})
+        return float(raw.get("lastFundingRate", 0.0))
+    except Exception:
+        return 0.0
+        
     async def start(self):
         if self.session is None or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=config.HTTP_TIMEOUT_SECONDS)
