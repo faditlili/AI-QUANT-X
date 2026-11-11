@@ -1,4 +1,8 @@
-"""Dependency-light technical indicators with input validation."""
+"""Technical indicators (vectorised) with input validation.
+
+compute_frame() returns the whole indicator table once (used by the backtester),
+calculate_indicators() returns the latest row as a dict (used by the live engine).
+"""
 import numpy as np
 import pandas as pd
 import config
@@ -26,12 +30,16 @@ def _clean(frame):
         raise IndicatorError("Insufficient valid candles")
     return df.reset_index(drop=True)
 
-def calculate_indicators(frame):
+def _pctile_of_last(window):
+    return float((window <= window[-1]).mean() * 100)
+
+def compute_frame(frame):
     df = _clean(frame)
     close, high, low = df.close, df.high, df.low
     df["ema9"] = close.ewm(span=config.EMA_FAST, adjust=False).mean()
     df["ema21"] = close.ewm(span=config.EMA_MEDIUM, adjust=False).mean()
     df["ema50"] = close.ewm(span=config.EMA_SLOW, adjust=False).mean()
+
     delta = close.diff()
     gain = delta.clip(lower=0).ewm(alpha=1/config.RSI_PERIOD, adjust=False, min_periods=config.RSI_PERIOD).mean()
     loss = (-delta.clip(upper=0)).ewm(alpha=1/config.RSI_PERIOD, adjust=False, min_periods=config.RSI_PERIOD).mean()
@@ -39,6 +47,7 @@ def calculate_indicators(frame):
     rsi = 100 - 100/(1+rs)
     rsi = rsi.mask((loss == 0) & (gain > 0), 100).mask((gain == 0) & (loss > 0), 0).fillna(50)
     df["rsi"] = rsi
+
     prev = close.shift(1)
     tr = pd.concat([high-low, (high-prev).abs(), (low-prev).abs()], axis=1).max(axis=1)
     atr = tr.ewm(alpha=1/config.ATR_PERIOD, adjust=False, min_periods=config.ATR_PERIOD).mean()
@@ -50,21 +59,56 @@ def calculate_indicators(frame):
     minus_di = 100 * minus_dm.ewm(alpha=1/config.ADX_PERIOD, adjust=False).mean() / atr_safe
     dx = 100 * (plus_di-minus_di).abs() / (plus_di+minus_di).replace(0, np.nan)
     adx = dx.ewm(alpha=1/config.ADX_PERIOD, adjust=False, min_periods=config.ADX_PERIOD).mean()
+    df["atr"] = atr
+    df["adx"] = adx.fillna(0.0)
+    df["plus_di"] = plus_di.fillna(0.0)
+    df["minus_di"] = minus_di.fillna(0.0)
+
     vol_sma = df.volume.rolling(config.VOLUME_SMA_PERIOD).mean()
-    last = len(df)-1
-    result = {
-        "price": float(close.iloc[last]), "close": float(close.iloc[last]),
-        "ema_fast": float(df.ema9.iloc[last]), "ema_medium": float(df.ema21.iloc[last]),
-        "ema_slow": float(df.ema50.iloc[last]), "ema9": float(df.ema9.iloc[last]),
-        "ema21": float(df.ema21.iloc[last]), "ema50": float(df.ema50.iloc[last]),
-        "rsi": float(df.rsi.iloc[last]), "atr": float(atr.iloc[last]),
-        "adx": float(adx.iloc[last]) if pd.notna(adx.iloc[last]) else 0.0,
-        "plus_di": float(plus_di.iloc[last]) if pd.notna(plus_di.iloc[last]) else 0.0,
-        "minus_di": float(minus_di.iloc[last]) if pd.notna(minus_di.iloc[last]) else 0.0,
-        "volume_sma": float(vol_sma.iloc[last]) if pd.notna(vol_sma.iloc[last]) else 0.0,
-        "volume_ratio": float(df.volume.iloc[last]/vol_sma.iloc[last]) if pd.notna(vol_sma.iloc[last]) and vol_sma.iloc[last] > 0 else 0.0,
-        "candles": int(len(df))
-    }
+    df["volume_sma"] = vol_sma.fillna(0.0)
+    df["volume_ratio"] = (df.volume / vol_sma.where(vol_sma > 0)).fillna(0.0)
+
+    # Bollinger bands / z-score (mean reversion)
+    mid = close.rolling(20).mean()
+    sd = close.rolling(20).std(ddof=0)
+    df["bb_mid"] = mid
+    df["bb_upper"] = mid + 2*sd
+    df["bb_lower"] = mid - 2*sd
+    df["zscore"] = ((close - mid) / sd.where(sd > 0)).fillna(0.0)
+    width = (df.bb_upper - df.bb_lower) / mid
+    df["bb_width"] = width
+    df["bb_width_pctile"] = width.rolling(100, min_periods=30).apply(_pctile_of_last, raw=True).fillna(50.0)
+
+    # Donchian channel of the previous 20 candles (excludes the current one) and squeeze flag
+    df["donchian_high"] = high.rolling(20).max().shift(1).fillna(high)
+    df["donchian_low"] = low.rolling(20).min().shift(1).fillna(low)
+    df["squeeze"] = (df.bb_width_pctile.rolling(10, min_periods=1).min() <= 25).astype(int)
+
+    # Volatility regime: percentile of ATR relative to price
+    atr_pct = atr / close
+    df["atr_pctile"] = atr_pct.rolling(100, min_periods=30).apply(_pctile_of_last, raw=True).fillna(50.0)
+    return df
+
+_KEYS = ("ema9","ema21","ema50","rsi","atr","adx","plus_di","minus_di","volume_sma","volume_ratio",
+         "bb_mid","bb_upper","bb_lower","zscore","bb_width","bb_width_pctile",
+         "donchian_high","donchian_low","atr_pctile")
+
+def snapshot(df, i=-1):
+    """Indicator values at row i as a plain dict."""
+    r = df.iloc[i]
+    out = {k: float(r[k]) for k in _KEYS}
+    price = float(r["close"])
+    out.update({
+        "price": price, "close": price,
+        "ema_fast": out["ema9"], "ema_medium": out["ema21"], "ema_slow": out["ema50"],
+        "squeeze": bool(r["squeeze"]),
+        "candles": int(len(df) if i == -1 else (i % len(df)) + 1),
+    })
+    return out
+
+def calculate_indicators(frame):
+    df = compute_frame(frame)
+    result = snapshot(df)
     if not all(np.isfinite(v) for v in result.values()):
         raise IndicatorError("Non-finite indicator result")
     return result
