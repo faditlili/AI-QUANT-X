@@ -95,7 +95,7 @@ def compute_frame(frame):
 
 _KEYS = ("ema9","ema21","ema50","rsi","atr","adx","plus_di","minus_di","volume_sma","volume_ratio",
          "bb_mid","bb_upper","bb_lower","zscore","bb_width","bb_width_pctile",
-         "donchian_high","donchian_low","atr_pctile")
+         "donchian_high","donchian_low","atr_pctile","vwap")
 
 def snapshot(df, i=-1):
     """Indicator values at row i as a plain dict."""
@@ -107,6 +107,7 @@ def snapshot(df, i=-1):
         "ema_fast": out["ema9"], "ema_medium": out["ema21"], "ema_slow": out["ema50"],
         "squeeze": bool(r["squeeze"]),
         "candles": int(len(df) if i == -1 else (i % len(df)) + 1),
+        "vwap": out.get("vwap", price)
     })
     return out
 
