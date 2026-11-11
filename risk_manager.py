@@ -1,4 +1,6 @@
 """Risk controls for a virtual portfolio. Aggregate open risk is capped at 10%."""
+import time
+from datetime import datetime
 import config
 
 class RiskManager:
@@ -19,7 +21,32 @@ class RiskManager:
                 "risk_remaining":max(0,cap-used),"daily_change":daily_change,
                 "daily_loss_limit":daily_limit,"daily_limit_hit":daily_change <= -daily_limit}
 
-    def calculate_position_size(self, symbol, source, side, price, atr):
+    def protection_status(self):
+        """Loss-streak pause and max-drawdown stop. Returns (blocked, reason)."""
+        closed=[t for t in self.db.get_recent_trades(config.MAX_CONSECUTIVE_LOSSES*3) if t["status"]=="CLOSED"]
+        last=closed[:config.MAX_CONSECUTIVE_LOSSES]
+        if len(last)==config.MAX_CONSECUTIVE_LOSSES and all((t["net_pnl"] or 0)<0 for t in last):
+            try:
+                age=time.time()-datetime.fromisoformat(last[0]["closed_at"]).timestamp()
+            except Exception:
+                age=config.LOSS_STREAK_PAUSE_SECONDS
+            if age<config.LOSS_STREAK_PAUSE_SECONDS:
+                return True,"Paused after consecutive losses"
+        equity=self.db.get_portfolio()["equity"]
+        until=float(self.db.get_state("dd_block_until","0"))
+        now=time.time()
+        if until:
+            if now<until:
+                return True,"Maximum drawdown pause"
+            self.db.reset_peak(equity); self.db.set_state("dd_block_until","0")
+            return False,""
+        peak=self.db.get_peak_equity()
+        if peak>0 and (peak-equity)/peak*100>=config.MAX_DRAWDOWN_PCT:
+            self.db.set_state("dd_block_until",now+config.DRAWDOWN_PAUSE_SECONDS)
+            return True,"Maximum drawdown reached"
+        return False,""
+
+    def calculate_position_size(self, symbol, source, side, price, atr, stop_mult=None, rr=None):
         if source not in ("spot","futures") or side not in ("LONG","SHORT"):
             return None, "Invalid market or side"
         if source=="spot" and side=="SHORT":
@@ -34,7 +61,12 @@ class RiskManager:
             return None, "Maximum open positions reached"
         if any(x["symbol"]==symbol and x["source"]==source for x in self.db.get_open_positions()):
             return None, "Duplicate open position"
-        stop_dist=atr*config.ATR_STOP_MULTIPLIER
+        blocked,why=self.protection_status()
+        if blocked:
+            return None, why
+        stop_mult=stop_mult or config.ATR_STOP_MULTIPLIER
+        rr=rr or config.REWARD_RISK_RATIO
+        stop_dist=atr*stop_mult
         stop=price-stop_dist if side=="LONG" else price+stop_dist
         risk_budget=min(p["equity"]*config.RISK_PER_TRADE_PCT/100,status["risk_remaining"])
         allocation=p["equity"]*config.MAX_ALLOCATION_PCT/100
@@ -44,7 +76,7 @@ class RiskManager:
         if qty<=0 or notional+fee>p["cash_balance"]:
             return None, "Insufficient virtual cash"
         return {"quantity":qty,"stop_price":stop,
-                "target_price":price+stop_dist*config.REWARD_RISK_RATIO if side=="LONG" else price-stop_dist*config.REWARD_RISK_RATIO,
+                "target_price":price+stop_dist*rr if side=="LONG" else price-stop_dist*rr,
                 "margin_used":notional,"risk_amount":qty*stop_dist,"opening_fee":fee}, ""
 
     def assess(self):
