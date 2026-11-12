@@ -1,9 +1,10 @@
-"""Ultimate FastAPI Dashboard (Nexus Ultra) with Stable TradingView Chart."""
+"""Ultimate FastAPI Dashboard (Nexus Ultra) with LIVE Candlestick Charts."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
 from backtest import run_backtest, format_report
 import config
+import time
 
 router=APIRouter()
 
@@ -16,7 +17,7 @@ async def dashboard():
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>AI QUANT X · NEXUS ULTRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- تم تثبيت الإصدار 4.2.3 لضمان عمل addAreaSeries -->
+  <!-- TradingView Lightweight Charts (v4) -->
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
@@ -68,15 +69,22 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- LIVE CANDLESTICK CHART -->
     <section class="glass rounded-2xl p-4 mb-6 scanline relative">
       <div class="flex justify-between items-center mb-2 relative z-10">
-         <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
-         <span class="text-[10px] text-slate-500 font-mono bg-black/50 px-2 py-0.5 rounded">PRO CHARTS</span>
+         <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">LIVE MARKET</h3>
+         <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-black/50 border border-slate-700 text-neon-cyan text-[10px] rounded px-2 py-1 outline-none font-mono">
+            <option value="BTCUSDT">BTC/USDT</option>
+            <option value="ETHUSDT">ETH/USDT</option>
+            <option value="SOLUSDT">SOL/USDT</option>
+            <option value="BNBUSDT">BNB/USDT</option>
+         </select>
       </div>
-      <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden relative z-10"></div>
-      <div id="radar-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#020308]/80 z-20 hidden">
-        <div class="w-12 h-12 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin mb-2"></div>
-        <span class="text-neon-cyan font-mono text-[10px] animate-pulse tracking-widest">SCANNING MARKET...</span>
+      <div id="tvchart" class="w-full h-56 rounded-lg overflow-hidden relative z-10"></div>
+      
+      <div id="loading-chart" class="absolute inset-0 flex flex-col items-center justify-center bg-[#020308]/80 z-20 hidden">
+        <div class="w-8 h-8 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin mb-2"></div>
+        <span class="text-neon-cyan font-mono text-[10px] animate-pulse">LOADING...</span>
       </div>
     </section>
 
@@ -154,7 +162,8 @@ async def dashboard():
 
 <script>
 let tvChart = null;
-let areaSeries = null;
+let candleSeries = null;
+let currentSymbol = "BTCUSDT";
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 async function togglePause() {
@@ -236,68 +245,57 @@ function initTVChart() {
     const chartElement = document.getElementById('tvchart');
     if(!chartElement) return;
     
-    // تأكد من أن العنصر له عرض قبل إنشاء الرسم البياني
     const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
     
     tvChart = LightweightCharts.createChart(chartElement, {
         width: width,
-        height: 192,
+        height: 224, // تم زيادة الارتفاع قليلاً للشموع
         layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#64748b' },
         grid: { vertLines: { color: 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: 'rgba(255, 255, 255, 0.02)' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: { borderVisible: false },
-        timeScale: { borderVisible: false, timeVisible: true, secondsVisible: true },
+        timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
     });
     
-    areaSeries = tvChart.addAreaSeries({
-        topColor: 'rgba(0, 243, 255, 0.4)',
-        bottomColor: 'rgba(0, 243, 255, 0.0)',
-        lineColor: '#00f3ff',
-        lineWidth: 2,
+    // تحويل الرسم البياني إلى شموع يابانية
+    candleSeries = tvChart.addCandlestickSeries({
+        upColor: '#00ff66',
+        downColor: '#ff003c',
+        borderVisible: false,
+        wickUpColor: '#00ff66',
+        wickDownColor: '#ff003c',
     });
     
     window.addEventListener('resize', () => {
         tvChart.applyOptions({ width: chartElement.clientWidth });
     });
+    
+    // تحميل البيانات الأولية
+    loadChartData(currentSymbol);
 }
 
-async function updateTVChart(trades, currentEquity) {
-    if(!areaSeries) return;
+async function loadChartData(symbol) {
+    const loader = document.getElementById('loading-chart');
+    loader.classList.remove('hidden');
     
-    let sortedTrades = trades.filter(t => t.status === 'CLOSED').reverse();
-    const radar = document.getElementById('radar-loader');
-    
-    if(sortedTrades.length === 0) {
-        radar.classList.remove('hidden');
-        areaSeries.setData([]);
-        return; 
-    } else {
-        radar.classList.add('hidden');
+    try {
+        const res = await fetch(`/api/market_klines?symbol=${symbol}&interval=15m`);
+        const data = await res.json();
+        
+        if(data && data.length > 0) {
+            candleSeries.setData(data);
+            tvChart.timeScale().fitContent();
+        }
+    } catch(e) {
+        console.error("Failed to load chart data", e);
     }
-
-    let data = [];
-    let currentEq = 200; // Initial balance
-    let nowSec = Math.floor(Date.now() / 1000);
-    let baseTime = nowSec - (sortedTrades.length * 3600) - 3600; 
     
-    // نقطة البداية
-    data.push({ time: baseTime, value: currentEq });
+    loader.classList.add('hidden');
+}
 
-    // نقاط الصفقات
-    sortedTrades.forEach((t, index) => {
-        currentEq += (Number(t.net_pnl) || 0);
-        data.push({ time: baseTime + ((index + 1) * 3600), value: currentEq });
-    });
-
-    // نقطة الربح العائم (Live)
-    let liveTime = nowSec;
-    if (liveTime <= data[data.length-1].time) {
-        liveTime = data[data.length-1].time + 60; 
-    }
-    data.push({ time: liveTime, value: currentEquity });
-
-    areaSeries.setData(data);
-    tvChart.timeScale().fitContent();
+function changeChartSymbol() {
+    currentSymbol = document.getElementById('chart-symbol').value;
+    loadChartData(currentSymbol);
 }
 
 async function load(){
@@ -431,19 +429,17 @@ async function load(){
     }).join('');
   }
 
-  // Update TradingView Chart
-  updateTVChart(trades, p.equity);
-
  }catch(e){ console.error('System Error:', e); }
 }
 
-// Initialize on Load with slight delay for chart width calculation
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => { initTVChart(); }, 200);
     loadLiveTickers();
     load(); 
     setInterval(load, 3000);
     setInterval(loadLiveTickers, 10000);
+    // تحديث الشموع كل 15 ثانية
+    setInterval(() => { loadChartData(currentSymbol); }, 15000);
 });
 </script>
 </body>
@@ -482,6 +478,28 @@ async def live_tickers(request: Request):
         return out
     except Exception:
         return []
+
+# --- دالة جديدة لجلب الشموع للواجهة ---
+@router.get("/api/market_klines")
+async def market_klines(request: Request, symbol: str = "BTCUSDT", interval: str = "15m"):
+    try:
+        market = request.app.state.engine.market
+        # جلب 100 شمعة
+        df = await market.get_klines(symbol, interval, 100, "futures")
+        
+        # تحويل البيانات إلى الشكل الذي يتوقعه TradingView (Unix Timestamp بالثواني)
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "time": int(row["timestamp"]) // 1000, # تحويل إلى ثواني
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"])
+            })
+        return data
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @router.post("/api/toggle_pause")
 async def toggle_pause(request:Request):
