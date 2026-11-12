@@ -1,9 +1,11 @@
 """Stop management shared by the live paper trader and the backtester."""
 import config
 
-def next_stop(side, entry, initial_stop, stop, price, trailing=None):
+def next_stop(side, entry, initial_stop, stop, price, trailing=None, fee=None):
     if trailing is None:
         trailing = config.TRAILING_ENABLED
+    if fee is None:
+        fee = config.FEE_RATE
     if not trailing:
         return stop
         
@@ -18,7 +20,7 @@ def next_stop(side, entry, initial_stop, stop, price, trailing=None):
     
     # 1. Break-even
     if gain_r >= config.BREAKEVEN_AT_R:
-        be = entry * (1 + sign * (2 * config.FEE_RATE + config.SLIPPAGE_BPS / 10000))
+        be = entry * (1 + sign * (2 * fee + config.SLIPPAGE_BPS / 10000))
         new = max(new, be) if sign == 1 else min(new, be)
         
     # 2. Chandelier Exit (تم استخدام المتغير من الإعدادات)
