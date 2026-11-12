@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard with Trade Markers, SL/TP Lines & PnL Heatmap."""
+"""Ultimate FastAPI Dashboard with Liquid Glass UI, Trade Markers, SL/TP & Heatmap."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -26,21 +26,57 @@ async def dashboard():
   </script>
   <style>
     body { background-color: #020308; background-image: radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.08) 0%, transparent 60%), linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; }
+    
+    /* Base Glass */
     .glass { background: rgba(10, 15, 30, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(0, 243, 255, 0.15); box-shadow: 0 4px 30px rgba(0,0,0,0.5); }
+    
+    /* --- Liquid Glass Effects --- */
+    .liquid-btn {
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+        box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(255, 255, 255, 0.05), inset 0px 1px 1px rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        transition: all 0.2s ease;
+    }
+    .liquid-btn:active {
+        box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05);
+        transform: scale(0.98);
+    }
+    .liquid-btn-green {
+        background: linear-gradient(145deg, rgba(0, 255, 102, 0.15), rgba(0, 100, 40, 0.2));
+        box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(0, 255, 102, 0.1), inset 0px 1px 2px rgba(0, 255, 102, 0.4);
+        border: 1px solid rgba(0, 255, 102, 0.3);
+        text-shadow: 0 0 8px rgba(0, 255, 102, 0.8);
+    }
+    .liquid-btn-red {
+        background: linear-gradient(145deg, rgba(255, 0, 60, 0.15), rgba(100, 0, 20, 0.2));
+        box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(255, 0, 60, 0.1), inset 0px 1px 2px rgba(255, 0, 60, 0.4);
+        border: 1px solid rgba(255, 0, 60, 0.3);
+        text-shadow: 0 0 8px rgba(255, 0, 60, 0.8);
+    }
+    .liquid-card {
+        background: linear-gradient(145deg, rgba(10, 15, 30, 0.8), rgba(5, 8, 15, 0.95));
+        box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), -3px -3px 12px rgba(0, 243, 255, 0.05), inset 0px 1px 1px rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 1rem;
+    }
+
     .neon-glow { text-shadow: 0 0 10px currentColor; }
     .scanline { position: relative; overflow: hidden; }
     .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 4s linear infinite; }
     @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
+    
     .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(0, 243, 255, 0.1); }
     .ticker { display: flex; white-space: nowrap; animation: ticker 40s linear infinite; }
     @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
+    
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+    
     .progress-bg { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 6px; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
     
-    /* Heatmap styles */
     .heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
     .heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: rgba(255,255,255,0.05); }
     .heatmap-cell.win { background: rgba(0, 255, 102, 0.8); }
@@ -54,8 +90,10 @@ async def dashboard():
     <header class="flex justify-between items-center mb-6">
       <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
       <div class="flex gap-2">
-        <button onclick="openBacktest()" class="px-3 py-1.5 rounded-full border border-neon-purple text-neon-purple text-xs font-bold font-orbitron tracking-wider bg-[rgba(176,38,255,0.05)] active:scale-95 transition-all">TEST</button>
-        <button id="pause-btn" onclick="togglePause()" class="px-3 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-green text-neon-green shadow-[0_0_10px_rgba(0,255,102,0.2)] bg-[rgba(0,255,102,0.05)]">● ACTIVE</button>
+        <!-- Liquid TEST Button -->
+        <button onclick="openBacktest()" class="px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider text-neon-purple liquid-btn">TEST</button>
+        <!-- Liquid Pause/Active Button -->
+        <button id="pause-btn" onclick="togglePause()" class="px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green">● ACTIVE</button>
       </div>
     </header>
 
@@ -65,16 +103,17 @@ async def dashboard():
       </div>
     </div>
 
-    <section class="text-center mb-8">
+    <!-- Main Balance Card -->
+    <section class="text-center mb-8 liquid-card p-6 relative">
       <p class="text-slate-400 text-[10px] uppercase tracking-[0.2em] mb-1 font-mono">Total Estimated Value (USDT)</p>
       <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
-      <div id="pnl-display" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700">
+      <div id="pnl-display" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700 shadow-inner">
         <span id="pnl-value" class="text-slate-400">+0.00 USDT</span>
         <span id="pnl-percent" class="text-slate-500 text-xs">(0.00%)</span>
       </div>
     </section>
 
-    <!-- LIVE CHART WITH MARKERS & SL/TP -->
+    <!-- LIVE CHART -->
     <section class="glass rounded-2xl p-4 mb-6 scanline relative">
       <div class="flex justify-between items-center mb-2 relative z-10">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">LIVE MARKET</h3>
@@ -93,12 +132,13 @@ async def dashboard():
       </div>
     </section>
 
+    <!-- Stats Cards -->
     <section class="grid grid-cols-2 gap-3 mb-6">
-      <div class="glass rounded-xl p-3 scanline">
+      <div class="liquid-card p-4">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
         <p id="winrate" class="font-mono text-xl text-neon-purple font-bold neon-glow">--%</p>
       </div>
-      <div class="glass rounded-xl p-3 scanline">
+      <div class="liquid-card p-4">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Profit Factor</p>
         <p id="pf" class="font-mono text-xl text-neon-purple font-bold neon-glow">--</p>
       </div>
@@ -166,8 +206,9 @@ async def dashboard():
     </section>
   </div>
 
+  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
-    <div class="glass w-full max-w-md rounded-2xl p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
+    <div class="liquid-card w-full max-w-md p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
       <h3 class="font-orbitron text-neon-purple text-lg mb-4 neon-glow">RUN BACKTEST</h3>
       <div class="space-y-4 mb-6">
@@ -178,7 +219,7 @@ async def dashboard():
           <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
         </select>
       </div>
-      <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-neon-purple/20 border border-neon-purple text-neon-purple font-bold py-2 rounded-lg hover:bg-neon-purple/30 transition-all">Run Simulation</button>
+      <button onclick="runBacktest()" id="bt-run-btn" class="w-full liquid-btn text-neon-purple font-bold py-2 rounded-lg transition-all">Run Simulation</button>
       <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800 max-h-48 overflow-y-auto custom-scroll"></div>
     </div>
   </div>
@@ -187,7 +228,7 @@ async def dashboard():
 let tvChart = null;
 let candleSeries = null;
 let currentSymbol = "BTCUSDT";
-let currentPositions = []; // لتخزين الصفقات المفتوحة لرسم الخطوط
+let currentPositions = []; 
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 async function togglePause() {
@@ -201,10 +242,10 @@ async function togglePause() {
 function updatePauseButton(isPaused) {
     const btn = document.getElementById('pause-btn');
     if (isPaused) {
-        btn.className = "px-3 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-red text-neon-red shadow-[0_0_10px_rgba(255,0,60,0.2)] bg-[rgba(255,0,60,0.05)]";
+        btn.className = "px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-red";
         btn.innerHTML = '■ PAUSED';
     } else {
-        btn.className = "px-3 py-1.5 rounded-full border text-xs font-bold font-orbitron tracking-wider transition-all active:scale-95 border-neon-green text-neon-green shadow-[0_0_10px_rgba(0,255,102,0.2)] bg-[rgba(0,255,102,0.05)]";
+        btn.className = "px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green";
         btn.innerHTML = '● ACTIVE';
     }
 }
@@ -308,17 +349,14 @@ async function loadChartData(symbol) {
             candleSeries.setData(data);
             tvChart.timeScale().fitContent();
             
-            // مسح الخطوط القديمة
             candleSeries.setMarkers([]);
             
-            // رسم خطوط الصفقات المفتوحة والعلامات
             const symbolPositions = currentPositions.filter(p => p.symbol === symbol);
             let markers = [];
             
             symbolPositions.forEach(pos => {
                 const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
                 
-                // إضافة السهم
                 markers.push({
                     time: entryTime,
                     position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
@@ -327,7 +365,6 @@ async function loadChartData(symbol) {
                     text: pos.side
                 });
                 
-                // إضافة خطوط المستويات
                 candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#00f3ff', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' });
                 candleSeries.createPriceLine({ price: Number(pos.stop_price), color: '#ff003c', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' });
                 candleSeries.createPriceLine({ price: Number(pos.target_price), color: '#00ff66', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' });
@@ -351,7 +388,6 @@ async function updateHeatmap(trades) {
     const heatmapContainer = document.getElementById('heatmap');
     let dayStats = {};
     
-    // تجميع الصفقات حسب اليوم
     trades.filter(t => t.status === 'CLOSED' && t.closed_at).forEach(t => {
         const date = t.closed_at.split('T')[0];
         if(!dayStats[date]) dayStats[date] = 0;
@@ -361,7 +397,6 @@ async function updateHeatmap(trades) {
     let html = '';
     let today = new Date();
     
-    // إنشاء خريطة لآخر 35 يوم (5 أسابيع)
     for(let i = 34; i >= 0; i--) {
         let d = new Date(today);
         d.setDate(today.getDate() - i);
@@ -372,7 +407,6 @@ async function updateHeatmap(trades) {
         if (pnl > 0) cellClass = 'win';
         else if (pnl < 0) cellClass = 'loss';
         
-        // opacity based on size (optional complexity, keeping it simple here)
         html += `<div class="heatmap-cell ${cellClass}" title="${dateStr}: ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)} USDT"></div>`;
     }
     heatmapContainer.innerHTML = html;
@@ -397,7 +431,6 @@ async function load(){
   const decisions = results[5].status === 'fulfilled' ? results[5].value : [];
   const trades = results[6].status === 'fulfilled' ? results[6].value : [];
 
-  // تحديث الصفقات الحالية للرسم البياني
   currentPositions = ps;
 
   updatePauseButton(status.paused);
@@ -409,17 +442,15 @@ async function load(){
   document.getElementById('pnl-value').textContent = `${pnlVal >= 0 ? '+' : ''}${fmt(pnlVal)} USDT`;
   document.getElementById('pnl-percent').textContent = `(${pnlVal >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
   
-  if(pnlVal > 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.3)]"; } 
-  else if(pnlVal < 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.3)]"; } 
-  else { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700"; }
+  if(pnlVal > 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.3)] shadow-inner"; } 
+  else if(pnlVal < 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.3)] shadow-inner"; } 
+  else { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700 shadow-inner"; }
 
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = (perf.profit_factor === null ? '∞' : (perf.profit_factor ? fmt(perf.profit_factor) : '0.00'));
 
-  // Update Heatmap
   updateHeatmap(trades);
 
-  // Strategy Performance
   const stratContainer = document.getElementById('strategy-stats');
   if (trades.length > 0) {
       let stratMap = {};
@@ -451,7 +482,6 @@ async function load(){
       stratContainer.innerHTML = '<div class="text-slate-500 text-xs font-mono">No closed trades yet.</div>';
   }
 
-  // Active Positions
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
   if(ps.length === 0) {
@@ -480,7 +510,6 @@ async function load(){
     `).join('');
   }
 
-  // Trade History
   const histContainer = document.getElementById('trade-history');
   const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 10);
   if(closedTrades.length === 0) {
@@ -503,7 +532,6 @@ async function load(){
       histContainer.innerHTML = html;
   }
 
-  // Neural Logs
   const logContainer = document.getElementById('neural-logs');
   if(decisions.length === 0) {
     logContainer.innerHTML = '<div class="text-slate-500">No scans yet...</div>';
@@ -515,10 +543,9 @@ async function load(){
     }).join('');
   }
 
-  // Update Chart Lines if new position opened for current symbol
   const currentSymbolPos = ps.find(p => p.symbol === currentSymbol);
   if (currentSymbolPos) {
-      loadChartData(currentSymbol); // Re-draw chart with new lines
+      loadChartData(currentSymbol); 
   }
 
  }catch(e){ console.error('System Error:', e); }
@@ -530,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
     load(); 
     setInterval(load, 3000);
     setInterval(loadLiveTickers, 10000);
-    setInterval(() => { loadChartData(currentSymbol); }, 30000); // تحديث الشموع كل 30 ثانية
+    setInterval(() => { loadChartData(currentSymbol); }, 30000); 
 });
 </script>
 </body>
