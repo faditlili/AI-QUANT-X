@@ -40,7 +40,7 @@ async def dashboard():
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    .tab-btn { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+    .tab-btn { padding: 0.75rem 1rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
     .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast { animation: slideDown 0.3s ease-out forwards; }
@@ -53,9 +53,10 @@ async def dashboard():
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14">
+        <!-- Hardcoded SVG Logo to prevent missing icon bug -->
         <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md">
-                <i data-lucide="cpu" class="w-4 h-4"></i>
+            <div style="background-color: #2563eb; color: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
             </div>
             <span class="font-bold text-base tracking-tight">AI QUANT</span>
         </div>
@@ -64,11 +65,11 @@ async def dashboard():
             <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
-      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200">
-        <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview</button>
-        <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-4 h-4"></i> Positions</button>
-        <button class="tab-btn" onclick="switchTab('history', this)"><i data-lucide="history" class="w-4 h-4"></i> History</button>
-        <button class="tab-btn" onclick="switchTab('logs', this)"><i data-lucide="terminal" class="w-4 h-4"></i> Logs</button>
+      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200 text-[11px]">
+        <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</button>
+        <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Positions</button>
+        <button class="tab-btn" onclick="switchTab('history', this)"><i data-lucide="history" class="w-3.5 h-3.5"></i> History</button>
+        <button class="tab-btn" onclick="switchTab('logs', this)"><i data-lucide="terminal" class="w-3.5 h-3.5"></i> Logs</button>
       </div>
     </div>
   </nav>
@@ -83,10 +84,10 @@ async def dashboard():
                 <h2 id="total-equity" class="text-3xl font-bold text-slate-900">0.00</h2>
                 <span class="text-slate-500 text-xs mb-1 font-medium">USDT</span>
             </div>
-            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10">
-                <i data-lucide="minus" class="w-3.5 h-3.5" id="pnl-icon"></i>
-                <span id="pnl-value">0.00 USDT</span>
-                <span id="pnl-percent" class="opacity-70">(0.00%)</span>
+            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10">
+                <i data-lucide="minus" class="w-3.5 h-3.5 text-slate-600" id="pnl-icon"></i>
+                <span id="pnl-value" class="text-slate-600">0.00 USDT</span>
+                <span id="pnl-percent" class="text-slate-500 opacity-80">(0.00%)</span>
             </div>
         </section>
 
@@ -330,6 +331,11 @@ function initTVChart() {
     
     window.addEventListener('resize', () => { tvChart.applyOptions({ width: chartElement.clientWidth }); });
     loadChartData(currentSymbol);
+
+    // Fix squished candles
+    setTimeout(() => {
+        tvChart.applyOptions({ width: chartElement.clientWidth, height: 192 });
+    }, 500);
 }
 
 function initCharts() {
@@ -466,7 +472,6 @@ function updateWeeklyStats(trades) {
 
     document.getElementById('stat-trades').textContent = totalTrades;
     
-    // Best Trade Logic
     const bestEl = document.getElementById('stat-best');
     if (bestTrade > 0) {
         bestEl.className = "text-sm font-bold text-green-600";
@@ -476,7 +481,6 @@ function updateWeeklyStats(trades) {
         bestEl.textContent = `0.00`;
     }
 
-    // Worst Trade Logic
     const worstEl = document.getElementById('stat-worst');
     if (worstTrade < 0) {
         worstEl.className = "text-sm font-bold text-red-600";
@@ -516,23 +520,33 @@ async function load(){
   const pnlPercent = (pnlVal / 200) * 100;
   const pnlDisplay = document.getElementById('pnl-display');
   const pnlIcon = document.getElementById('pnl-icon');
+  const pnlValueEl = document.getElementById('pnl-value');
+  const pnlPercentEl = document.getElementById('pnl-percent');
   
-  // PnL Final Logic
   if (pnlVal > 0) {
-      document.getElementById('pnl-value').textContent = `+${fmt(pnlVal)} USDT`;
-      document.getElementById('pnl-percent').textContent = `(+${pnlPercent.toFixed(2)}%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700 relative z-10";
+      pnlValueEl.textContent = `+${fmt(pnlVal)} USDT`;
+      pnlPercentEl.textContent = `(+${pnlPercent.toFixed(2)}%)`;
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 border border-green-200 relative z-10";
+      pnlValueEl.className = "text-green-700";
+      pnlPercentEl.className = "text-green-600 opacity-80";
       pnlIcon.setAttribute('data-lucide', 'trending-up');
+      pnlIcon.className = "w-3.5 h-3.5 text-green-700";
   } else if (pnlVal < 0) {
-      document.getElementById('pnl-value').textContent = `${fmt(pnlVal)} USDT`;
-      document.getElementById('pnl-percent').textContent = `(${pnlPercent.toFixed(2)}%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-700 relative z-10";
+      pnlValueEl.textContent = `${fmt(pnlVal)} USDT`;
+      pnlPercentEl.textContent = `(${pnlPercent.toFixed(2)}%)`;
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 border border-red-200 relative z-10";
+      pnlValueEl.className = "text-red-700";
+      pnlPercentEl.className = "text-red-600 opacity-80";
       pnlIcon.setAttribute('data-lucide', 'trending-down');
+      pnlIcon.className = "w-3.5 h-3.5 text-red-700";
   } else {
-      document.getElementById('pnl-value').textContent = `0.00 USDT`;
-      document.getElementById('pnl-percent').textContent = `(0.00%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10";
+      pnlValueEl.textContent = `0.00 USDT`;
+      pnlPercentEl.textContent = `(0.00%)`;
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10";
+      pnlValueEl.className = "text-slate-600";
+      pnlPercentEl.className = "text-slate-500 opacity-80";
       pnlIcon.setAttribute('data-lucide', 'minus');
+      pnlIcon.className = "w-3.5 h-3.5 text-slate-600";
   }
   lucide.createIcons();
 
