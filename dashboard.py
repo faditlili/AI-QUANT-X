@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition with Forced PnL Colors."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -40,7 +40,7 @@ async def dashboard():
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    .tab-btn { padding: 0.75rem 1rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+    .tab-btn { padding: 0.75rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
     .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast { animation: slideDown 0.3s ease-out forwards; }
@@ -53,7 +53,6 @@ async def dashboard():
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14">
-        <!-- Hardcoded SVG Logo to prevent missing icon bug -->
         <div class="flex items-center gap-2">
             <div style="background-color: #2563eb; color: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
@@ -65,7 +64,7 @@ async def dashboard():
             <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
-      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200 text-[11px]">
+      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200 text-[11px] px-1">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</button>
         <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Positions</button>
         <button class="tab-btn" onclick="switchTab('history', this)"><i data-lucide="history" class="w-3.5 h-3.5"></i> History</button>
@@ -86,8 +85,8 @@ async def dashboard():
             </div>
             <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10">
                 <i data-lucide="minus" class="w-3.5 h-3.5 text-slate-600" id="pnl-icon"></i>
-                <span id="pnl-value" class="text-slate-600">0.00 USDT</span>
-                <span id="pnl-percent" class="text-slate-500 opacity-80">(0.00%)</span>
+                <span id="pnl-value" style="color: #64748b;">0.00 USDT</span>
+                <span id="pnl-percent" style="color: #94a3b8;">(0.00%)</span>
             </div>
         </section>
 
@@ -128,11 +127,11 @@ async def dashboard():
                 </div>
                 <div class="text-center border-x border-slate-100">
                     <p class="text-[10px] text-slate-400 uppercase font-semibold">Best Trade</p>
-                    <p id="stat-best" class="text-sm font-bold text-slate-800">0.00</p>
+                    <p id="stat-best" class="text-sm font-bold" style="color: #64748b;">0.00</p>
                 </div>
                 <div class="text-center">
                     <p class="text-[10px] text-slate-400 uppercase font-semibold">Worst Trade</p>
-                    <p id="stat-worst" class="text-sm font-bold text-slate-800">0.00</p>
+                    <p id="stat-worst" class="text-sm font-bold" style="color: #64748b;">0.00</p>
                 </div>
             </div>
         </section>
@@ -226,6 +225,11 @@ let pfChart = null;
 let weeklyChart = null;
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+// الألوان الصارمة
+const COLOR_GREEN = '#10b981';
+const COLOR_RED = '#ef4444';
+const COLOR_NEUTRAL = '#64748b';
+
 lucide.createIcons();
 
 function showToast(message, type = 'info') {
@@ -252,6 +256,13 @@ function switchTab(tabName, btn) {
     btn.classList.add('active');
     document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
     document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+    
+    if (tabName === 'overview' && tvChart) {
+        setTimeout(() => {
+            tvChart.applyOptions({ width: document.getElementById('tvchart').clientWidth });
+            tvChart.timeScale().fitContent();
+        }, 100);
+    }
 }
 
 async function togglePause() {
@@ -325,24 +336,25 @@ function initTVChart() {
     });
     
     candleSeries = tvChart.addCandlestickSeries({
-        upColor: '#10b981', downColor: '#ef4444',
-        borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444',
+        upColor: COLOR_GREEN, downColor: COLOR_RED,
+        borderVisible: false, wickUpColor: COLOR_GREEN, wickDownColor: COLOR_RED,
     });
     
     window.addEventListener('resize', () => { tvChart.applyOptions({ width: chartElement.clientWidth }); });
     loadChartData(currentSymbol);
 
-    // Fix squished candles
     setTimeout(() => {
-        tvChart.applyOptions({ width: chartElement.clientWidth, height: 192 });
-    }, 500);
+        const w = chartElement.clientWidth;
+        tvChart.applyOptions({ width: w, height: 192 });
+        tvChart.timeScale().fitContent();
+    }, 1000);
 }
 
 function initCharts() {
     const ctxWin = document.getElementById('winrateChart').getContext('2d');
     winrateChart = new Chart(ctxWin, {
         type: 'doughnut',
-        data: { datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#f1f5f9'], borderWidth: 0, cutout: '80%' }] },
+        data: { datasets: [{ data: [0, 100], backgroundColor: [COLOR_GREEN, '#f1f5f9'], borderWidth: 0, cutout: '80%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
     });
 
@@ -384,18 +396,18 @@ async function loadLiveTickers() {
         if(data.length > 0) {
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
-                let textColor = 'text-slate-500';
+                let textColor = COLOR_NEUTRAL;
                 let bgColor = 'bg-slate-50';
                 let sign = '';
-                if (d.change > 0) { textColor = 'text-green-600'; bgColor = 'bg-green-50'; sign = '+'; }
-                else if (d.change < 0) { textColor = 'text-red-600'; bgColor = 'bg-red-50'; }
+                if (d.change > 0) { textColor = COLOR_GREEN; bgColor = 'bg-green-50'; sign = '+'; }
+                else if (d.change < 0) { textColor = COLOR_RED; bgColor = 'bg-red-50'; }
 
                 return `
                 <div class="flex justify-between items-center p-1.5 rounded-md ${bgColor} mb-1">
                     <span class="font-bold text-slate-800 text-[11px]">${d.symbol}</span>
                     <div class="text-right">
                         <div class="text-slate-900 text-[11px] font-mono font-semibold">$${fmt(d.price)}</div>
-                        <div class="${textColor} text-[9px] font-bold">${sign}${d.change}%</div>
+                        <div class="text-[9px] font-bold" style="color: ${textColor};">${sign}${d.change}%</div>
                     </div>
                 </div>`;
             }).join('');
@@ -419,12 +431,12 @@ async function loadChartData(symbol) {
                 const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
                 markers.push({
                     time: entryTime, position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
-                    color: pos.side === 'LONG' ? '#10b981' : '#ef4444',
+                    color: pos.side === 'LONG' ? COLOR_GREEN : COLOR_RED,
                     shape: pos.side === 'LONG' ? 'arrowUp' : 'arrowDown', text: pos.side
                 });
                 candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#3b82f6', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' });
-                candleSeries.createPriceLine({ price: Number(pos.stop_price), color: '#ef4444', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' });
-                candleSeries.createPriceLine({ price: Number(pos.target_price), color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' });
+                candleSeries.createPriceLine({ price: Number(pos.stop_price), color: COLOR_RED, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' });
+                candleSeries.createPriceLine({ price: Number(pos.target_price), color: COLOR_GREEN, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' });
             });
             candleSeries.setMarkers(markers);
         }
@@ -457,7 +469,7 @@ function updateWeeklyStats(trades) {
 
     const labels = days.map(d => d.label);
     const data = days.map(d => d.pnl);
-    const bgColors = data.map(v => v > 0 ? '#10b981' : (v < 0 ? '#ef4444' : '#cbd5e1'));
+    const bgColors = data.map(v => v > 0 ? COLOR_GREEN : (v < 0 ? COLOR_RED : '#cbd5e1'));
     
     if(weeklyChart) {
         weeklyChart.data.labels = labels;
@@ -472,21 +484,22 @@ function updateWeeklyStats(trades) {
 
     document.getElementById('stat-trades').textContent = totalTrades;
     
+    // تطبيق اللون الأخضر أو الأحمر أو الرمادي بشكل صارم (Inline CSS)
     const bestEl = document.getElementById('stat-best');
     if (bestTrade > 0) {
-        bestEl.className = "text-sm font-bold text-green-600";
+        bestEl.style.color = COLOR_GREEN;
         bestEl.textContent = `+${fmt(bestTrade)}`;
     } else {
-        bestEl.className = "text-sm font-bold text-slate-600";
+        bestEl.style.color = COLOR_NEUTRAL;
         bestEl.textContent = `0.00`;
     }
 
     const worstEl = document.getElementById('stat-worst');
     if (worstTrade < 0) {
-        worstEl.className = "text-sm font-bold text-red-600";
+        worstEl.style.color = COLOR_RED;
         worstEl.textContent = `${fmt(worstTrade)}`;
     } else {
-        worstEl.className = "text-sm font-bold text-slate-600";
+        worstEl.style.color = COLOR_NEUTRAL;
         worstEl.textContent = `0.00`;
     }
 }
@@ -523,30 +536,40 @@ async function load(){
   const pnlValueEl = document.getElementById('pnl-value');
   const pnlPercentEl = document.getElementById('pnl-percent');
   
+  // إجبار الألوان باستخدام Inline Styles
   if (pnlVal > 0) {
       pnlValueEl.textContent = `+${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(+${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 border border-green-200 relative z-10";
-      pnlValueEl.className = "text-green-700";
-      pnlPercentEl.className = "text-green-600 opacity-80";
+      
+      pnlValueEl.style.color = COLOR_GREEN;
+      pnlPercentEl.style.color = COLOR_GREEN;
+      
       pnlIcon.setAttribute('data-lucide', 'trending-up');
-      pnlIcon.className = "w-3.5 h-3.5 text-green-700";
+      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.style.color = COLOR_GREEN;
   } else if (pnlVal < 0) {
       pnlValueEl.textContent = `${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 border border-red-200 relative z-10";
-      pnlValueEl.className = "text-red-700";
-      pnlPercentEl.className = "text-red-600 opacity-80";
+      
+      pnlValueEl.style.color = COLOR_RED;
+      pnlPercentEl.style.color = COLOR_RED;
+      
       pnlIcon.setAttribute('data-lucide', 'trending-down');
-      pnlIcon.className = "w-3.5 h-3.5 text-red-700";
+      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.style.color = COLOR_RED;
   } else {
       pnlValueEl.textContent = `0.00 USDT`;
       pnlPercentEl.textContent = `(0.00%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10";
-      pnlValueEl.className = "text-slate-600";
-      pnlPercentEl.className = "text-slate-500 opacity-80";
+      
+      pnlValueEl.style.color = COLOR_NEUTRAL;
+      pnlPercentEl.style.color = COLOR_NEUTRAL;
+      
       pnlIcon.setAttribute('data-lucide', 'minus');
-      pnlIcon.className = "w-3.5 h-3.5 text-slate-600";
+      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.style.color = COLOR_NEUTRAL;
   }
   lucide.createIcons();
 
@@ -556,9 +579,9 @@ async function load(){
   const breadthBar = document.getElementById('breadth-bar');
   const breadthLabel = document.getElementById('breadth-label');
   breadthBar.style.width = `${breadth}%`;
-  if(breadth > 60) { breadthBar.className = 'bg-green-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bullish'; breadthLabel.className = 'text-[10px] font-bold text-green-600 w-12 text-right'; }
-  else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.className = 'text-[10px] font-bold text-red-600 w-12 text-right'; }
-  else { breadthBar.className = 'bg-blue-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.className = 'text-[10px] font-bold text-blue-600 w-12 text-right'; }
+  if(breadth > 60) { breadthBar.className = 'bg-green-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bullish'; breadthLabel.style.color = COLOR_GREEN; }
+  else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.style.color = COLOR_RED; }
+  else { breadthBar.className = 'bg-blue-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.style.color = '#3b82f6'; }
 
   let wr = perf.win_rate || 0;
   document.getElementById('winrate').textContent = wr.toFixed(0) + '%';
@@ -584,11 +607,11 @@ async function load(){
         const sideMultiplier = pos.side === 'LONG' ? 1 : -1;
         const unrealizedPnl = (currentPrice - entryPrice) * qty * sideMultiplier;
         
-        let pnlColor = 'text-slate-600';
+        let pnlColorStyle = `color: ${COLOR_NEUTRAL};`;
         let pnlBg = 'bg-slate-100';
         let pnlSign = '';
-        if (unrealizedPnl > 0) { pnlColor = 'text-green-600'; pnlBg = 'bg-green-50'; pnlSign = '+'; }
-        else if (unrealizedPnl < 0) { pnlColor = 'text-red-600'; pnlBg = 'bg-red-50'; }
+        if (unrealizedPnl > 0) { pnlColorStyle = `color: ${COLOR_GREEN};`; pnlBg = 'bg-green-50'; pnlSign = '+'; }
+        else if (unrealizedPnl < 0) { pnlColorStyle = `color: ${COLOR_RED};`; pnlBg = 'bg-red-50'; }
 
         return `
       <div class="card p-3 border-l-4 ${pos.side === 'LONG' ? 'border-l-green-500' : 'border-l-red-500'}">
@@ -597,7 +620,7 @@ async function load(){
               <h4 class="font-bold text-slate-900 text-base">${pos.symbol}</h4>
               <div class="flex gap-2 items-center mt-1">
                   <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">${pos.side}</span>
-                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${pnlBg} ${pnlColor}">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${pnlBg}" style="${pnlColorStyle}">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
               </div>
           </div>
           <div class="text-right">
@@ -609,10 +632,10 @@ async function load(){
         </div>
         <div class="flex justify-between items-center pt-2 border-t border-slate-100">
            <div class="flex gap-3">
-               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] text-green-600 font-semibold">${Number(pos.target_price).toFixed(4)}</p></div>
-               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] text-red-600 font-semibold">${Number(pos.stop_price).toFixed(4)}</p></div>
+               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_GREEN};">${Number(pos.target_price).toFixed(4)}</p></div>
+               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_RED};">${Number(pos.stop_price).toFixed(4)}</p></div>
            </div>
-           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold text-red-600 border border-red-200 px-2.5 py-1 rounded-md hover:bg-red-50 transition-colors">CLOSE</button>
+           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold border px-2.5 py-1 rounded-md hover:bg-red-50 transition-colors" style="color: ${COLOR_RED}; border-color: ${COLOR_RED}40;">CLOSE</button>
         </div>
       </div>
     `}).join('');
@@ -628,16 +651,16 @@ async function load(){
           <tr><th class="p-2">Asset</th><th class="p-2">Side</th><th class="p-2 text-right">Entry</th><th class="p-2 text-right">Net PnL</th></tr>
         </thead><tbody>`;
       closedTrades.forEach(t => {
-          let pnlClass = 'text-slate-600';
+          let pnlColorStyle = `color: ${COLOR_NEUTRAL};`;
           let pnlSign = '';
-          if (t.net_pnl > 0) { pnlClass = 'text-green-600'; pnlSign = '+'; }
-          else if (t.net_pnl < 0) { pnlClass = 'text-red-600'; }
+          if (t.net_pnl > 0) { pnlColorStyle = `color: ${COLOR_GREEN};`; pnlSign = '+'; }
+          else if (t.net_pnl < 0) { pnlColorStyle = `color: ${COLOR_RED};`; }
 
           html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
               <td class="p-2 font-bold text-slate-800 text-[11px]">${t.symbol}</td>
-              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${t.side}</span></td>
+              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100' : 'bg-red-100'}" style="${pnlColorStyle}">${t.side}</span></td>
               <td class="p-2 text-right font-mono text-[11px]">${Number(t.entry_price).toFixed(2)}</td>
-              <td class="p-2 text-right font-mono font-bold text-[11px] ${pnlClass}">${pnlSign}${fmt(t.net_pnl)}</td>
+              <td class="p-2 text-right font-mono font-bold text-[11px]" style="${pnlColorStyle}">${pnlSign}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
       html += '</tbody></table>';
@@ -650,8 +673,8 @@ async function load(){
   } else {
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        let color = d.action.includes('BUY') ? 'text-green-400' : d.action.includes('SHORT') ? 'text-red-400' : 'text-slate-400';
-        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="${color} shrink-0 font-semibold">${d.action}</span> <span class="text-slate-500 truncate">${d.reason.substring(0, 45)}...</span></div>`;
+        let colorStyle = d.action.includes('BUY') ? `color: ${COLOR_GREEN};` : d.action.includes('SHORT') ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
+        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${d.reason.substring(0, 45)}...</span></div>`;
     }).join('');
   }
 
