@@ -1,4 +1,4 @@
-"""The Absolute Best FastAPI Dashboard - SaaS Edition with Live PnL & Toasts."""
+"""Ultimate FastAPI Dashboard - SaaS Edition with 7-Day Bar Chart & Quick Stats."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -37,48 +37,34 @@ async def dashboard():
     body { background-color: #f8fafc; font-family: 'Inter', sans-serif; color: #0f172a; -webkit-tap-highlight-color: transparent; }
     .card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03); border-radius: 1rem; transition: all 0.2s ease; }
     .card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); transform: translateY(-2px); }
-    
-    /* Custom Scrollbar */
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    
-    /* Heatmap */
-    .heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-    .heatmap-cell { aspect-ratio: 1; border-radius: 3px; background: #f1f5f9; }
-    .heatmap-cell.win { background: #10b981; }
-    .heatmap-cell.loss { background: #ef4444; }
-    .heatmap-cell.neutral { background: #e2e8f0; }
-    
-    /* Navigation Tabs */
-    .tab-btn { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; }
+    .tab-btn { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
     .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
-    
-    /* Toast Animation */
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast { animation: slideDown 0.3s ease-out forwards; }
   </style>
 </head>
 <body class="min-h-screen pb-10">
 
-  <!-- Toast Container -->
   <div id="toast-container" class="fixed top-4 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
 
-  <!-- Top Navigation -->
-  <nav class="bg-white border-b border-slate-200 sticky top-0 z-30">
+  <!-- Top Navigation (Sticky & Compact) -->
+  <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
-      <div class="flex justify-between items-center h-16">
+      <div class="flex justify-between items-center h-14">
         <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold shadow-md">X</div>
-            <span class="font-bold text-lg tracking-tight">AI QUANT</span>
+            <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md">X</div>
+            <span class="font-bold text-base tracking-tight">AI QUANT</span>
         </div>
         <div class="flex gap-2">
-            <button onclick="openBacktest()" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 flex items-center gap-1"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
-            <button id="pause-btn" onclick="togglePause()" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
+            <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 flex items-center gap-1"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
+            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
       <!-- Tabs -->
-      <div class="flex gap-2 mt-2 overflow-x-auto custom-scroll border-b border-slate-200">
+      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview</button>
         <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-4 h-4"></i> Positions</button>
         <button class="tab-btn" onclick="switchTab('history', this)"><i data-lucide="history" class="w-4 h-4"></i> History</button>
@@ -87,90 +73,113 @@ async def dashboard():
     </div>
   </nav>
 
-  <div class="max-w-md mx-auto px-4 pt-6">
+  <div class="max-w-md mx-auto px-4 pt-4">
     
     <!-- OVERVIEW TAB -->
-    <div id="tab-overview" class="space-y-6">
+    <div id="tab-overview" class="space-y-4">
         <!-- Main Balance -->
-        <section class="card p-6 relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="wallet" class="w-24 h-24"></i></div>
+        <section class="card p-5 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-5"><i data-lucide="wallet" class="w-24 h-24"></i></div>
             <p class="text-slate-500 text-xs font-medium mb-1">Total Balance</p>
-            <div class="flex items-end gap-3 relative z-10">
-                <h2 id="total-equity" class="text-4xl font-bold text-slate-900">0.00</h2>
-                <span class="text-slate-500 text-sm mb-1">USDT</span>
+            <div class="flex items-end gap-2 relative z-10">
+                <h2 id="total-equity" class="text-3xl font-bold text-slate-900">0.00</h2>
+                <span class="text-slate-500 text-xs mb-1 font-medium">USDT</span>
             </div>
-            <div id="pnl-display" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 relative z-10">
+            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10">
                 <i data-lucide="trending-up" class="w-3.5 h-3.5" id="pnl-icon"></i>
                 <span id="pnl-value">+0.00 USDT</span>
                 <span id="pnl-percent" class="opacity-70">(0.00%)</span>
             </div>
         </section>
 
-        <!-- Market Breadth -->
-        <section class="card p-4">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-xs font-semibold text-slate-600 flex items-center gap-1"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Market Breadth</h3>
-                <span id="breadth-label" class="text-xs font-bold text-slate-800">Loading...</span>
+        <!-- Stats Grid with Donut Charts -->
+        <section class="grid grid-cols-2 gap-3">
+            <div class="card p-3 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-semibold text-slate-500 mb-1">Win Rate</h3>
+                <div class="relative w-16 h-16">
+                    <canvas id="winrateChart"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="winrate" class="text-xs font-bold text-slate-800">0%</span>
+                    </div>
+                </div>
             </div>
-            <div class="w-full bg-slate-100 rounded-full h-2.5">
-                <div id="breadth-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style="width: 50%"></div>
+            <div class="card p-3 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-semibold text-slate-500 mb-1">Profit Factor</h3>
+                <div class="relative w-16 h-16">
+                    <canvas id="pfChart"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="pf" class="text-xs font-bold text-slate-800">0.0</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- NEW: Weekly Performance Bar Chart -->
+        <section class="card p-4">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i> Weekly Performance</h3>
+                <span class="text-[10px] text-slate-400 font-medium">Last 7 Days</span>
+            </div>
+            <div class="h-32 w-full">
+                <canvas id="weeklyChart"></canvas>
+            </div>
+            <!-- Quick Stats under Chart -->
+            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
+                <div class="text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Trades</p>
+                    <p id="stat-trades" class="text-sm font-bold text-slate-800">0</p>
+                </div>
+                <div class="text-center border-x border-slate-100">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Best Trade</p>
+                    <p id="stat-best" class="text-sm font-bold text-green-600">+0.00</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Worst Trade</p>
+                    <p id="stat-worst" class="text-sm font-bold text-red-600">-0.00</p>
+                </div>
             </div>
         </section>
 
         <!-- Chart -->
         <section class="card p-4">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-3">
                 <h3 class="text-sm font-semibold text-slate-800">Market Chart</h3>
-                <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1 outline-none font-medium">
+                <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-slate-50 border border-slate-200 text-slate-700 text-[11px] rounded-md px-2 py-1 outline-none font-medium">
                     <option value="BTCUSDT">BTC/USDT</option>
                     <option value="ETHUSDT">ETH/USDT</option>
                     <option value="SOLUSDT">SOL/USDT</option>
                     <option value="BNBUSDT">BNB/USDT</option>
                 </select>
             </div>
-            <div id="tvchart" class="w-full h-56 rounded-lg overflow-hidden"></div>
+            <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden"></div>
         </section>
 
-        <!-- Stats Grid with Donut Charts -->
-        <section class="grid grid-cols-2 gap-4">
-            <div class="card p-4 flex flex-col items-center justify-center">
-                <h3 class="text-xs font-medium text-slate-500 mb-2">Win Rate</h3>
-                <div class="relative w-20 h-20">
-                    <canvas id="winrateChart"></canvas>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="winrate" class="text-sm font-bold text-slate-800">0%</span>
-                    </div>
-                </div>
+        <!-- Market Breadth (Compact) -->
+        <section class="card p-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="bar-chart" class="w-4 h-4 text-slate-400"></i>
+                <span class="text-xs font-semibold text-slate-600">Market Breadth</span>
             </div>
-            <div class="card p-4 flex flex-col items-center justify-center">
-                <h3 class="text-xs font-medium text-slate-500 mb-2">Profit Factor</h3>
-                <div class="relative w-20 h-20">
-                    <canvas id="pfChart"></canvas>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="pf" class="text-sm font-bold text-slate-800">0.0</span>
-                    </div>
+            <div class="flex items-center gap-3 w-1/2">
+                <div class="w-full bg-slate-100 rounded-full h-1.5 flex-1">
+                    <div id="breadth-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 50%"></div>
                 </div>
+                <span id="breadth-label" class="text-[10px] font-bold text-slate-800 w-12 text-right">50%</span>
             </div>
-        </section>
-
-        <!-- Heatmap -->
-        <section class="card p-4">
-            <h3 class="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i> 30-Day PnL</h3>
-            <div class="heatmap-grid" id="heatmap"></div>
         </section>
 
         <!-- Market Watch -->
         <section class="card p-4">
-            <h3 class="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4"></i> Market Watch</h3>
-            <div class="h-40 overflow-y-auto custom-scroll" id="market-watch">
+            <h3 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4 text-slate-400"></i> Market Watch</h3>
+            <div class="h-36 overflow-y-auto custom-scroll pr-1" id="market-watch">
                 <div class="text-center text-slate-400 text-xs py-4">Loading data...</div>
             </div>
         </section>
     </div>
 
     <!-- POSITIONS TAB -->
-    <div id="tab-positions" class="hidden space-y-4">
-        <div class="flex justify-between items-center mb-2">
+    <div id="tab-positions" class="hidden space-y-3">
+        <div class="flex justify-between items-center mb-1">
             <h3 class="text-lg font-bold text-slate-800">Active Positions</h3>
             <span id="pos-count" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">0 Open</span>
         </div>
@@ -178,17 +187,17 @@ async def dashboard():
     </div>
 
     <!-- HISTORY TAB -->
-    <div id="tab-history" class="hidden space-y-4">
-        <h3 class="text-lg font-bold text-slate-800 mb-2">Trade History</h3>
+    <div id="tab-history" class="hidden space-y-3">
+        <h3 class="text-lg font-bold text-slate-800 mb-1">Trade History</h3>
         <div class="card overflow-hidden" id="trade-history">
             <div class="text-center text-slate-400 text-xs py-8">Loading history...</div>
         </div>
     </div>
 
     <!-- LOGS TAB -->
-    <div id="tab-logs" class="hidden space-y-4">
-        <h3 class="text-lg font-bold text-slate-800 mb-2">AI Neural Logs</h3>
-        <div class="card p-4 h-96 overflow-y-auto font-mono text-[11px] custom-scroll bg-slate-900 text-slate-300 rounded-xl" id="neural-logs">
+    <div id="tab-logs" class="hidden space-y-3">
+        <h3 class="text-lg font-bold text-slate-800 mb-1">AI Neural Logs</h3>
+        <div class="card p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll bg-slate-900 text-slate-300 rounded-xl" id="neural-logs">
             <div class="text-slate-500">Waiting for scan cycle...</div>
         </div>
     </div>
@@ -197,23 +206,23 @@ async def dashboard():
 
   <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
-    <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="flask-conical" class="w-5 h-5 text-blue-500"></i> Run Backtest</h3>
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i data-lucide="flask-conical" class="w-4 h-4 text-blue-500"></i> Run Backtest</h3>
         <button onclick="closeBacktest()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="space-y-4 mb-6">
-        <select id="bt-symbol" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none">
+      <div class="space-y-3 mb-5">
+        <select id="bt-symbol" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs outline-none">
           <option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option>
         </select>
-        <select id="bt-strat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm outline-none">
+        <select id="bt-strat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs outline-none">
           <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
         </select>
       </div>
-      <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700 transition-all flex justify-center items-center gap-2">
-        <i data-lucide="play" class="w-4 h-4"></i> Run Simulation
+      <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-all flex justify-center items-center gap-2 text-sm">
+        <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation
       </button>
-      <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-slate-50 p-3 rounded-lg border border-slate-200 max-h-48 overflow-y-auto custom-scroll"></div>
+      <div id="bt-results" class="mt-3 text-[10px] font-mono whitespace-pre-wrap hidden bg-slate-50 p-2 rounded-lg border border-slate-200 max-h-40 overflow-y-auto custom-scroll"></div>
     </div>
   </div>
 
@@ -224,20 +233,19 @@ let currentSymbol = "BTCUSDT";
 let currentPositions = []; 
 let winrateChart = null;
 let pfChart = null;
+let weeklyChart = null;
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-// Initialize Icons
 lucide.createIcons();
 
-// --- Toast Notification System ---
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-slate-800';
     const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
     
-    toast.className = `toast ${bgColor} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 pointer-events-auto`;
-    toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="text-sm font-medium">${message}</span>`;
+    toast.className = `toast ${bgColor} text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto text-xs font-medium`;
+    toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${message}</span>`;
     container.appendChild(toast);
     lucide.createIcons();
     
@@ -246,10 +254,9 @@ function showToast(message, type = 'info') {
         toast.style.transform = 'translateY(-20px)';
         toast.style.transition = 'all 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 2500);
 }
 
-// Tabs Logic
 function switchTab(tabName, btn) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -260,7 +267,7 @@ function switchTab(tabName, btn) {
 async function togglePause() {
     const btn = document.getElementById('pause-btn');
     const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>...';
+    btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i>...';
     lucide.createIcons();
     
     const res = await fetch('/api/toggle_pause', { method: 'POST' });
@@ -272,10 +279,10 @@ async function togglePause() {
 function updatePauseButton(isPaused) {
     const btn = document.getElementById('pause-btn');
     if (isPaused) {
-        btn.className = "px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200 flex items-center gap-1";
+        btn.className = "px-2.5 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200 flex items-center gap-1";
         btn.innerHTML = '<i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> PAUSED';
     } else {
-        btn.className = "px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1";
+        btn.className = "px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1";
         btn.innerHTML = '<i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE';
     }
     lucide.createIcons();
@@ -296,7 +303,7 @@ async function runBacktest() {
     const strat = document.getElementById('bt-strat').value;
     const btn = document.getElementById('bt-run-btn');
     const resDiv = document.getElementById('bt-results');
-    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Running...'; btn.disabled = true; resDiv.classList.add('hidden');
+    btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Running...'; btn.disabled = true; resDiv.classList.add('hidden');
     lucide.createIcons();
     
     try {
@@ -309,19 +316,17 @@ async function runBacktest() {
         } 
         else { showToast("Error: " + data.error, 'error'); }
     } catch(e) { showToast("Failed to run backtest", 'error'); }
-    btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Run Simulation'; btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation'; btn.disabled = false;
     lucide.createIcons();
 }
 
-// Init Charts
 function initTVChart() {
     const chartElement = document.getElementById('tvchart');
     if(!chartElement) return;
-    
     const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
     
     tvChart = LightweightCharts.createChart(chartElement, {
-        width: width, height: 224,
+        width: width, height: 192,
         layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#64748b' },
         grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
@@ -338,7 +343,7 @@ function initTVChart() {
     loadChartData(currentSymbol);
 }
 
-function initDonutCharts() {
+function initCharts() {
     const ctxWin = document.getElementById('winrateChart').getContext('2d');
     winrateChart = new Chart(ctxWin, {
         type: 'doughnut',
@@ -351,6 +356,29 @@ function initDonutCharts() {
         type: 'doughnut',
         data: { datasets: [{ data: [0, 100], backgroundColor: ['#8b5cf6', '#f1f5f9'], borderWidth: 0, cutout: '80%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
+    });
+
+    const ctxWeek = document.getElementById('weeklyChart').getContext('2d');
+    weeklyChart = new Chart(ctxWeek, {
+        type: 'bar',
+        data: {
+            labels: ['', '', '', '', '', '', ''],
+            datasets: [{
+                label: 'PnL (USDT)',
+                data: [0, 0, 0, 0, 0, 0, 0],
+                backgroundColor: '#cbd5e1',
+                borderRadius: 4,
+                barPercentage: 0.6
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw >= 0 ? '+' : ''}${fmt(ctx.raw)} USDT` } } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
+                y: { display: false, grace: '15%' } // Hide Y-axis for clean look
+            }
+        }
     });
 }
 
@@ -366,11 +394,11 @@ async function loadLiveTickers() {
                 const bgColor = isUp ? 'bg-green-50' : 'bg-red-50';
                 const sign = isUp ? '+' : '';
                 return `
-                <div class="flex justify-between items-center p-2 rounded-lg ${bgColor} mb-1">
-                    <span class="font-bold text-slate-800 text-xs">${d.symbol}</span>
+                <div class="flex justify-between items-center p-1.5 rounded-md ${bgColor} mb-1">
+                    <span class="font-bold text-slate-800 text-[11px]">${d.symbol}</span>
                     <div class="text-right">
-                        <div class="text-slate-900 text-xs font-mono font-semibold">$${fmt(d.price)}</div>
-                        <div class="${textColor} text-[10px] font-bold">${sign}${d.change}%</div>
+                        <div class="text-slate-900 text-[11px] font-mono font-semibold">$${fmt(d.price)}</div>
+                        <div class="${textColor} text-[9px] font-bold">${sign}${d.change}%</div>
                     </div>
                 </div>`;
             }).join('');
@@ -382,7 +410,6 @@ async function loadChartData(symbol) {
     try {
         const res = await fetch(`/api/market_klines?symbol=${symbol}&interval=15m`);
         const data = await res.json();
-        
         if(data && data.length > 0) {
             candleSeries.setData(data);
             tvChart.timeScale().fitContent();
@@ -409,25 +436,52 @@ async function loadChartData(symbol) {
 
 function changeChartSymbol() { currentSymbol = document.getElementById('chart-symbol').value; loadChartData(currentSymbol); }
 
-async function updateHeatmap(trades) {
-    const heatmapContainer = document.getElementById('heatmap');
-    let dayStats = {};
-    trades.filter(t => t.status === 'CLOSED' && t.closed_at).forEach(t => {
-        const date = t.closed_at.split('T')[0];
-        if(!dayStats[date]) dayStats[date] = 0;
-        dayStats[date] += Number(t.net_pnl) || 0;
-    });
+// Function to update Weekly Chart & Quick Stats
+function updateWeeklyStats(trades) {
+    const closedTrades = trades.filter(t => t.status === 'CLOSED' && t.closed_at);
     
-    let html = '';
+    // Last 7 days labels
+    let days = [];
+    let dayStats = {};
     let today = new Date();
-    for(let i = 34; i >= 0; i--) {
-        let d = new Date(today); d.setDate(today.getDate() - i);
+    
+    for(let i = 6; i >= 0; i--) {
+        let d = new Date(today);
+        d.setDate(today.getDate() - i);
         let dateStr = d.toISOString().split('T')[0];
-        let pnl = dayStats[dateStr] || 0;
-        let cellClass = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'neutral');
-        html += `<div class="heatmap-cell ${cellClass}" title="${dateStr}: ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)} USDT"></div>`;
+        let dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+        days.push({ date: dateStr, label: dayName, pnl: 0 });
     }
-    heatmapContainer.innerHTML = html;
+
+    // Group trades by day
+    closedTrades.forEach(t => {
+        const date = t.closed_at.split('T')[0];
+        let dayIndex = days.findIndex(d => d.date === date);
+        if(dayIndex !== -1) {
+            days[dayIndex].pnl += Number(t.net_pnl) || 0;
+        }
+    });
+
+    // Update Chart Data
+    const labels = days.map(d => d.label);
+    const data = days.map(d => d.pnl);
+    const bgColors = data.map(v => v >= 0 ? '#10b981' : '#ef4444'); // Green for win, Red for loss
+    
+    if(weeklyChart) {
+        weeklyChart.data.labels = labels;
+        weeklyChart.data.datasets[0].data = data;
+        weeklyChart.data.datasets[0].backgroundColor = bgColors;
+        weeklyChart.update();
+    }
+
+    // Update Quick Stats
+    const totalTrades = closedTrades.length;
+    const bestTrade = closedTrades.length > 0 ? Math.max(...closedTrades.map(t => Number(t.net_pnl))) : 0;
+    const worstTrade = closedTrades.length > 0 ? Math.min(...closedTrades.map(t => Number(t.net_pnl))) : 0;
+
+    document.getElementById('stat-trades').textContent = totalTrades;
+    document.getElementById('stat-best').textContent = `+${fmt(bestTrade)}`;
+    document.getElementById('stat-worst').textContent = `${fmt(worstTrade)}`;
 }
 
 async function load(){
@@ -439,7 +493,7 @@ async function load(){
       fetch('/api/status').then(y=>y.json()),
       fetch('/api/decisions').then(y=>y.json()),
       fetch('/api/trades').then(y=>y.json()),
-      fetch('/api/risk').then(y=>y.json()) // Fetch risk status for Breadth
+      fetch('/api/risk').then(y=>y.json())
   ]);
   
   const p = results[0].status === 'fulfilled' ? results[0].value : {equity: 0, unrealized_pnl: 0, realized_pnl: 0};
@@ -463,25 +517,28 @@ async function load(){
   document.getElementById('pnl-percent').textContent = `(${pnlVal >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
   
   if(pnlVal > 0) {
-      pnlDisplay.className = "mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 relative z-10";
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'trending-up');
   } else if(pnlVal < 0) {
-      pnlDisplay.className = "mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 relative z-10";
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-700 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'trending-down');
   } else {
-      pnlDisplay.className = "mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 relative z-10";
+      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'minus');
   }
   lucide.createIcons();
+
+  // Update Weekly Chart & Stats
+  updateWeeklyStats(trades);
 
   // Breadth
   const breadth = risk.breadth || 50;
   const breadthBar = document.getElementById('breadth-bar');
   const breadthLabel = document.getElementById('breadth-label');
   breadthBar.style.width = `${breadth}%`;
-  if(breadth > 60) { breadthBar.className = 'bg-green-500 h-2.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bullish'; breadthLabel.className = 'text-xs font-bold text-green-600'; }
-  else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-2.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.className = 'text-xs font-bold text-red-600'; }
-  else { breadthBar.className = 'bg-blue-500 h-2.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.className = 'text-xs font-bold text-blue-600'; }
+  if(breadth > 60) { breadthBar.className = 'bg-green-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bullish'; breadthLabel.className = 'text-[10px] font-bold text-green-600 w-12 text-right'; }
+  else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.className = 'text-[10px] font-bold text-red-600 w-12 text-right'; }
+  else { breadthBar.className = 'bg-blue-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.className = 'text-[10px] font-bold text-blue-600 w-12 text-right'; }
 
   // Update Donut Charts
   let wr = perf.win_rate || 0;
@@ -493,8 +550,6 @@ async function load(){
   let pfPct = Math.min((pf / 3) * 100, 100);
   if(pfChart) pfChart.data.datasets[0].data = [pfPct, 100 - pfPct], pfChart.update();
 
-  updateHeatmap(trades);
-
   // Positions with Live PnL
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
@@ -502,7 +557,6 @@ async function load(){
     posContainer.innerHTML = '<div class="text-center text-slate-400 text-sm py-8 card">No active positions</div>';
   } else {
     posContainer.innerHTML = ps.map(pos => {
-        // حساب الربح العائم
         const currentPrice = Number(pos.current_price || pos.entry_price);
         const entryPrice = Number(pos.entry_price);
         const qty = Number(pos.quantity);
@@ -514,28 +568,28 @@ async function load(){
         const pnlBg = unrealizedPnl >= 0 ? 'bg-green-50' : 'bg-red-50';
 
         return `
-      <div class="card p-4 border-l-4 ${pos.side === 'LONG' ? 'border-l-green-500' : 'border-l-red-500'}">
-        <div class="flex justify-between items-start mb-3">
+      <div class="card p-3 border-l-4 ${pos.side === 'LONG' ? 'border-l-green-500' : 'border-l-red-500'}">
+        <div class="flex justify-between items-start mb-2">
           <div>
-              <h4 class="font-bold text-slate-900 text-lg">${pos.symbol}</h4>
+              <h4 class="font-bold text-slate-900 text-base">${pos.symbol}</h4>
               <div class="flex gap-2 items-center mt-1">
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${pos.side}</span>
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded ${pnlBg} ${pnlColor}">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">${pos.side}</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${pnlBg} ${pnlColor}">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
               </div>
           </div>
           <div class="text-right">
-            <p class="text-[10px] text-slate-400 uppercase">Entry</p>
-            <p class="font-mono text-sm font-semibold text-slate-800">${entryPrice.toFixed(4)}</p>
-            <p class="text-[10px] text-slate-400 uppercase mt-1">Current</p>
-            <p class="font-mono text-xs font-semibold text-slate-600">${currentPrice.toFixed(4)}</p>
+            <p class="text-[9px] text-slate-400 uppercase">Entry</p>
+            <p class="font-mono text-xs font-semibold text-slate-800">${entryPrice.toFixed(4)}</p>
+            <p class="text-[9px] text-slate-400 uppercase mt-0.5">Current</p>
+            <p class="font-mono text-[11px] font-semibold text-slate-600">${currentPrice.toFixed(4)}</p>
           </div>
         </div>
-        <div class="flex justify-between items-center pt-3 border-t border-slate-100">
-           <div class="flex gap-4">
-               <div><p class="text-[10px] text-slate-400 uppercase">Target</p><p class="font-mono text-xs text-green-600 font-semibold">${Number(pos.target_price).toFixed(4)}</p></div>
-               <div><p class="text-[10px] text-slate-400 uppercase">Stop</p><p class="font-mono text-xs text-red-600 font-semibold">${Number(pos.stop_price).toFixed(4)}</p></div>
+        <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+           <div class="flex gap-3">
+               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] text-green-600 font-semibold">${Number(pos.target_price).toFixed(4)}</p></div>
+               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] text-red-600 font-semibold">${Number(pos.stop_price).toFixed(4)}</p></div>
            </div>
-           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[10px] font-bold text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">CLOSE</button>
+           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold text-red-600 border border-red-200 px-2.5 py-1 rounded-md hover:bg-red-50 transition-colors">CLOSE</button>
         </div>
       </div>
     `}).join('');
@@ -549,15 +603,15 @@ async function load(){
   } else {
       let html = `<table class="w-full text-left text-xs text-slate-600">
         <thead class="bg-slate-50 text-[10px] uppercase text-slate-400 border-b border-slate-200">
-          <tr><th class="p-3">Asset</th><th class="p-3">Side</th><th class="p-3 text-right">Entry</th><th class="p-3 text-right">Net PnL</th></tr>
+          <tr><th class="p-2">Asset</th><th class="p-2">Side</th><th class="p-2 text-right">Entry</th><th class="p-2 text-right">Net PnL</th></tr>
         </thead><tbody>`;
       closedTrades.forEach(t => {
           const isWin = Number(t.net_pnl) > 0;
           html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td class="p-3 font-bold text-slate-800">${t.symbol}</td>
-              <td class="p-3"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${t.side}</span></td>
-              <td class="p-3 text-right font-mono">${Number(t.entry_price).toFixed(2)}</td>
-              <td class="p-3 text-right font-mono font-bold ${isWin ? 'text-green-600' : 'text-red-600'}">${isWin ? '+' : ''}${fmt(t.net_pnl)}</td>
+              <td class="p-2 font-bold text-slate-800 text-[11px]">${t.symbol}</td>
+              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${t.side}</span></td>
+              <td class="p-2 text-right font-mono text-[11px]">${Number(t.entry_price).toFixed(2)}</td>
+              <td class="p-2 text-right font-mono font-bold text-[11px] ${isWin ? 'text-green-600' : 'text-red-600'}">${isWin ? '+' : ''}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
       html += '</tbody></table>';
@@ -572,7 +626,7 @@ async function load(){
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
         let color = d.action.includes('BUY') ? 'text-green-400' : d.action.includes('SHORT') ? 'text-red-400' : 'text-slate-400';
-        return `<div class="mb-1.5 flex gap-2"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="${color} shrink-0 font-semibold">${d.action}</span> <span class="text-slate-500 truncate">${d.reason.substring(0, 50)}...</span></div>`;
+        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="${color} shrink-0 font-semibold">${d.action}</span> <span class="text-slate-500 truncate">${d.reason.substring(0, 45)}...</span></div>`;
     }).join('');
   }
 
@@ -580,7 +634,7 @@ async function load(){
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => { initTVChart(); initDonutCharts(); }, 200);
+    setTimeout(() => { initTVChart(); initCharts(); }, 200);
     loadLiveTickers();
     load(); 
     setInterval(load, 3000);
@@ -598,7 +652,6 @@ async def portfolio(request:Request): return request.app.state.db.get_portfolio(
 @router.get("/api/risk")
 async def risk(request:Request): 
     r = request.app.state.engine.risk.get_risk_status()
-    # نضيف اتساع السوق للـ API
     r["breadth"] = await request.app.state.engine.market.get_market_breadth("futures")
     return r
 
@@ -608,7 +661,6 @@ async def positions(request:Request):
     market = request.app.state.engine.market
     pos_list = db.get_open_positions()
     
-    # جلب السعر الحالي للصفقات المفتوحة لحساب الربح العائم
     if pos_list:
         sources = {p["source"] for p in pos_list}
         all_prices = {}
