@@ -1,5 +1,5 @@
 """Public Binance market data only."""
-import asyncio, logging
+import asyncio, logging, time
 from datetime import datetime, timezone
 import aiohttp
 import pandas as pd
@@ -16,6 +16,8 @@ class MarketData:
         self.sem = asyncio.Semaphore(config.MAX_CONCURRENT_REQUESTS)
         self._metadata = {}
         self._fng_cache = {"value": 50, "timestamp": 0}
+        self._ticker_cache = {}
+        self._cooldown_until = 0.0
 
     async def start(self):
         if self.session is None or self.session.closed:
@@ -42,12 +44,19 @@ class MarketData:
 
     async def _get(self, source, path, params=None):
         await self.start()
+        wait = self._cooldown_until - time.monotonic()
+        if wait > 0:
+            raise MarketDataError(f"API cooldown, retry in {wait:.0f}s")
         url = self._base(source) + path
         async with self.sem:
             for attempt in range(config.HTTP_RETRY_ATTEMPTS + 1):
                 try:
                     async with self.session.get(url, params=params) as response:
-                        if response.status in (418, 429): raise MarketDataError(f"Rate limited ({response.status})")
+                        if response.status in (418, 429):
+                            try: retry = float(response.headers.get("Retry-After", 30))
+                            except (TypeError, ValueError): retry = 30.0
+                            self._cooldown_until = time.monotonic() + min(max(retry, 10.0), 600.0)
+                            raise MarketDataError(f"Rate limited ({response.status})")
                         if response.status >= 500 and attempt < config.HTTP_RETRY_ATTEMPTS:
                             await asyncio.sleep(1.5 * (attempt + 1)); continue
                         if response.status != 200:
@@ -126,9 +135,14 @@ class MarketData:
         return {x["symbol"]: {"last_price": float(x["price"])} for x in raw if x.get("symbol") and x.get("price")}
         
     async def get_tickers_24h(self, source="futures"):
+        cached = self._ticker_cache.get(source)
+        if cached and time.monotonic() - cached[0] < 15:
+            return cached[1]
         raw = await self._get(source, self._path(source, "ticker"))
         if isinstance(raw, dict): raw = [raw]
-        return {x["symbol"]: {"last_price": float(x.get("lastPrice", x.get("last_price", 0))), "quote_volume": float(x.get("quoteVolume", x.get("quote_volume", 0))), "change_percent": float(x.get("priceChangePercent", 0))} for x in raw if x.get("symbol")}
+        data = {x["symbol"]: {"last_price": float(x.get("lastPrice", x.get("last_price", 0))), "quote_volume": float(x.get("quoteVolume", x.get("quote_volume", 0))), "change_percent": float(x.get("priceChangePercent", 0))} for x in raw if x.get("symbol")}
+        self._ticker_cache[source] = (time.monotonic(), data)
+        return data
 
     async def get_funding_rate(self, symbol, source="futures"):
         if source != "futures": return 0.0
@@ -144,7 +158,6 @@ class MarketData:
         liquid = [s for s in configured if tickers.get(s, {}).get("quote_volume", 0) >= config.MIN_24H_VOLUME_USDT]
         return liquid[:config.MAX_SYMBOLS_TO_SCAN]
 
-    # --- الدالة الجديدة التي تم نقلها هنا لحل المشكلة ---
     async def fetch_history(self, symbol, interval="1h", source="futures", candles=None):
         import time as _t
         import pandas as pd
