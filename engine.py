@@ -85,7 +85,7 @@ class Engine:
         
         if open_symbols:
             # كلود أشار إلى أن 0.8 صارم جداً، جعلناها 0.92 لتسمح ببعض التنوع
-            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.92)
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.98)
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
