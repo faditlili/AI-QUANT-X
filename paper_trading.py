@@ -18,7 +18,7 @@ class PaperTrader:
         data={"symbol":symbol,"source":source,"side":side,"quantity":sized["quantity"],
               "entry_price":entry,"stop_price":stop,"target_price":sized["target_price"],
               "margin_used":entry*sized["quantity"],"risk_amount":risk,
-              "opening_fee":entry*sized["quantity"]*config.FEE_RATE,
+              "opening_fee":entry*sized["quantity"]*config.fee_rate(source),
               "initial_stop":stop,"strategy":strategy,"metadata":metadata or {}}
         try:
             pos=self.db.create_position(data)
@@ -31,11 +31,11 @@ class PaperTrader:
         if not pos or pos["status"]!="OPEN": return None
         slip=config.SLIPPAGE_BPS/10000
         exit_price=price*(1-slip if pos["side"]=="LONG" else 1+slip)
-        fee=exit_price*pos["quantity"]*config.FEE_RATE
+        fee=exit_price*pos["quantity"]*config.fee_rate(pos["source"])
         return self.db.close_position(pid,exit_price,reason,fee)
 
     def _manage_stop(self,pos,price):
-        return next_stop(pos["side"],pos["entry_price"],pos.get("initial_stop"),pos["stop_price"],price)
+        return next_stop(pos["side"],pos["entry_price"],pos.get("initial_stop"),pos["stop_price"],price,fee=config.fee_rate(pos["source"]))
 
     def update_market_prices(self,prices,source=None):
         results=[]
@@ -57,11 +57,11 @@ class PaperTrader:
                         close_qty = pos["quantity"] * config.SCALE_OUT_PCT
                         slip = config.SLIPPAGE_BPS / 10000
                         exit_price = price * (1 - slip if pos["side"] == "LONG" else 1 + slip)
-                        fee = exit_price * close_qty * config.FEE_RATE
+                        fee = exit_price * close_qty * config.fee_rate(pos["source"])
                         updated = self.db.partial_close(pos["id"], exit_price, close_qty, f"SCALE_OUT_{config.SCALE_OUT_R}R", fee)
                         if updated:
                             pos = updated
-                            be_price = pos["entry_price"] * (1 + sign * (2 * config.FEE_RATE + config.SLIPPAGE_BPS / 10000))
+                            be_price = pos["entry_price"] * (1 + sign * (2 * config.fee_rate(pos["source"]) + config.SLIPPAGE_BPS / 10000))
                             self.db.update_stop(pos["id"], be_price)
                             pos["stop_price"] = be_price
             
