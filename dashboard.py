@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard (Nexus Ultra) with TradingView & Advanced Analytics."""
+"""Ultimate FastAPI Dashboard (Nexus Ultra) with Stable TradingView Chart."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -16,7 +16,8 @@ async def dashboard():
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>AI QUANT X · NEXUS ULTRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- تم تثبيت الإصدار 4.2.3 لضمان عمل addAreaSeries -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
@@ -235,8 +236,11 @@ function initTVChart() {
     const chartElement = document.getElementById('tvchart');
     if(!chartElement) return;
     
+    // تأكد من أن العنصر له عرض قبل إنشاء الرسم البياني
+    const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
+    
     tvChart = LightweightCharts.createChart(chartElement, {
-        width: chartElement.clientWidth || 300,
+        width: width,
         height: 192,
         layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#64748b' },
         grid: { vertLines: { color: 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: 'rgba(255, 255, 255, 0.02)' } },
@@ -265,7 +269,7 @@ async function updateTVChart(trades, currentEquity) {
     
     if(sortedTrades.length === 0) {
         radar.classList.remove('hidden');
-        areaSeries.setData([]); // clear chart
+        areaSeries.setData([]);
         return; 
     } else {
         radar.classList.add('hidden');
@@ -273,24 +277,24 @@ async function updateTVChart(trades, currentEquity) {
 
     let data = [];
     let currentEq = 200; // Initial balance
-    let baseTime = Math.floor(Date.now() / 1000) - (sortedTrades.length * 3600) - 3600; // Start an hour before first trade
+    let nowSec = Math.floor(Date.now() / 1000);
+    let baseTime = nowSec - (sortedTrades.length * 3600) - 3600; 
     
-    // Add starting point
+    // نقطة البداية
     data.push({ time: baseTime, value: currentEq });
 
+    // نقاط الصفقات
     sortedTrades.forEach((t, index) => {
         currentEq += (Number(t.net_pnl) || 0);
-        // Add 1 hour per trade for sequential visual rendering
         data.push({ time: baseTime + ((index + 1) * 3600), value: currentEq });
     });
 
-    // Add live point (current time)
-    let now = Math.floor(Date.now() / 1000);
-    // Ensure live point is strictly after the last trade
-    if (now <= data[data.length-1].time) {
-        now = data[data.length-1].time + 60; 
+    // نقطة الربح العائم (Live)
+    let liveTime = nowSec;
+    if (liveTime <= data[data.length-1].time) {
+        liveTime = data[data.length-1].time + 60; 
     }
-    data.push({ time: now, value: currentEquity });
+    data.push({ time: liveTime, value: currentEquity });
 
     areaSeries.setData(data);
     tvChart.timeScale().fitContent();
@@ -433,8 +437,9 @@ async function load(){
  }catch(e){ console.error('System Error:', e); }
 }
 
+// Initialize on Load with slight delay for chart width calculation
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => { initTVChart(); }, 100);
+    setTimeout(() => { initTVChart(); }, 200);
     loadLiveTickers();
     load(); 
     setInterval(load, 3000);
