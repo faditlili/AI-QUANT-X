@@ -81,25 +81,27 @@ class Engine:
 
         # 3. فحص مصفوفة الارتباط
         open_positions = self.db.get_open_positions()
+        if any(p["symbol"] == symbol for p in open_positions):
+            return  # نفس العملة مفتوحة بالفعل (سبوت أو فيوتشرز): لا نضاعف التعرض
         open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
         
         if open_symbols:
-            # كلود أشار إلى أن 0.8 صارم جداً، جعلناها 0.92 لتسمح ببعض التنوع
+            # عتبة 0.98 = الفلتر شبه معطّل عملياً؛ خفّضها (مثلاً 0.85) لمنع الصفقات المترابطة
             is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.98)
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
                 return
         
-        # إذا اجتاز كل الفحوصات، نضيف القرار للفتح
-        self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
-        
         # 4. فتح الصفقة
         opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
                  {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"]},
                  stop_mult=result["stop_mult"],rr=result["rr"],strategy=result["strategy"])
                  
+        if not opened.get("success") and opened.get("reason")!="Duplicate open position":
+            self.db.add_decision(symbol,source,"HOLD",result["score"],f"Not opened: {opened.get('reason')}")
         if opened.get("success"):
+            self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
             self.db.set_state(f"cooldown:{source}:{symbol}",time.time())
             log.info("Paper position opened: %s %s %s (%s)",source,symbol,result["side"],result["strategy"])
             if self.notifier:
@@ -148,7 +150,7 @@ class Engine:
             except Exception as exc:
                 log.warning("Source scan failed (%s): %s",source,exc)
         
-        # --- إصلاح كلود: حفظ الحالة وتنظيف الجداول القديمة لمنع تضخم قاعدة البيانات ---
+        # حفظ الحالة وتنظيف الجداول القديمة لمنع تضخم قاعدة البيانات
         self.db.snapshot()
         self.db.prune()
 
