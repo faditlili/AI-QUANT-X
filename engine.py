@@ -63,37 +63,33 @@ class Engine:
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         
-        # دمج كل المؤشرات الكلية في الـ Context
         ctx={"source":source,"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
              "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour}
              
         result=select_signal(ctx)
         
-        # 1. فحص الإشارة الأساسية
         if self.paused or result["action"]=="HOLD":
             self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
             return
             
-        # 2. فحص الكولداون
         if time.time()-float(self.db.get_state(f"cooldown:{source}:{symbol}","0")) < config.SIGNAL_COOLDOWN_SECONDS:
             return
 
-        # 3. فحص مصفوفة الارتباط
         open_positions = self.db.get_open_positions()
         if any(p["symbol"] == symbol for p in open_positions):
-            return  # نفس العملة مفتوحة بالفعل (سبوت أو فيوتشرز): لا نضاعف التعرض
+            return 
+            
         open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
         
         if open_symbols:
-            # عتبة 0.98 = الفلتر شبه معطّل عملياً؛ خفّضها (مثلاً 0.85) لمنع الصفقات المترابطة
+            # عتبة 0.85 بناءً على توصية كلود لمنع الصفقات المترابطة
             is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.85)
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
                 return
         
-        # 4. فتح الصفقة
         opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
                  {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"]},
                  stop_mult=result["stop_mult"],rr=result["rr"],strategy=result["strategy"])
@@ -125,8 +121,6 @@ class Engine:
 
     async def scan_once(self):
         self.last_scan=time.time()
-        
-        # جلب المؤشرات الكلية مرة واحدة لكل مسح
         fng = await self.market.get_fear_and_greed()
         
         for source in config.MARKET_SOURCES:
@@ -150,7 +144,6 @@ class Engine:
             except Exception as exc:
                 log.warning("Source scan failed (%s): %s",source,exc)
         
-        # حفظ الحالة وتنظيف الجداول القديمة لمنع تضخم قاعدة البيانات
         self.db.snapshot()
         self.db.prune()
 
