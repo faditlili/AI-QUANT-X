@@ -1,7 +1,7 @@
 import hmac, logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 import uvicorn
 import config
 from database import Database
@@ -32,15 +32,97 @@ async def lifespan(app:FastAPI):
 app=FastAPI(title=config.APP_NAME,version=config.APP_VERSION,lifespan=lifespan)
 app.include_router(router)
 
+# --- شاشة تسجيل الدخول الفخمة ---
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    return """
+    <!doctype html>
+    <html lang="en" class="dark">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+      <title>AI QUANT X · LOGIN</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+      <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020308; background-image: radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.08) 0%, transparent 60%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .glass-card { background: rgba(10, 15, 30, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(0, 243, 255, 0.15); box-shadow: 0 4px 30px rgba(0,0,0,0.5); border-radius: 1.5rem; }
+        .neon-text { font-family: 'Orbitron', sans-serif; text-shadow: 0 0 15px #00f3ff; }
+        .liquid-input { background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.05); color: white; }
+        .liquid-input:focus { outline: none; border-color: #00f3ff; box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05), 0 0 10px rgba(0, 243, 255, 0.2); }
+        .liquid-btn { background: linear-gradient(145deg, rgba(0, 243, 255, 0.15), rgba(0, 100, 150, 0.2)); box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(0, 243, 255, 0.1), inset 0px 1px 2px rgba(0, 243, 255, 0.4); border: 1px solid rgba(0, 243, 255, 0.3); color: #00f3ff; text-shadow: 0 0 8px rgba(0, 243, 255, 0.8); transition: all 0.2s ease; }
+        .liquid-btn:active { box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05); transform: scale(0.98); }
+      </style>
+    </head>
+    <body class="text-slate-200">
+      <div class="glass-card p-8 w-full max-w-sm mx-4 relative overflow-hidden">
+        <!-- Scanline effect -->
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00f3ff] to-transparent animate-[scan_3s_linear_infinite]"></div>
+        
+        <div class="text-center mb-8">
+          <h1 class="text-3xl font-black text-white tracking-widest neon-text">AI QUANT <span style="color:#b026ff; text-shadow: 0 0 15px #b026ff;">X</span></h1>
+          <p class="text-slate-400 text-xs uppercase tracking-widest mt-2 font-mono">System Authentication</p>
+        </div>
+        
+        <form action="/api/login" method="POST" class="space-y-6">
+          <div>
+            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-2">Access Key</label>
+            <input type="password" name="password" required placeholder="••••••••••••" 
+                   class="w-full liquid-input rounded-xl px-4 py-3 text-sm tracking-widest text-center transition-all">
+          </div>
+          
+          <button type="submit" class="w-full liquid-btn font-bold py-3 rounded-xl tracking-wider font-orbitron text-sm mt-4">
+            INITIALIZE
+          </button>
+        </form>
+        
+        <div class="mt-8 text-center border-t border-slate-800 pt-4">
+            <p class="text-[9px] text-slate-600 font-mono">PROTECTED BY QUANTUM ENCRYPTION</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+# --- مسار معالجة تسجيل الدخول ---
+@app.post("/api/login")
+async def api_login(password: str = Form(...)):
+    if not config.DASHBOARD_KEY:
+        return RedirectResponse("/", status_code=303)
+        
+    if hmac.compare_digest(str(password).encode(), config.DASHBOARD_KEY.encode()):
+        response = RedirectResponse("/", status_code=303)
+        response.set_cookie("dash_key", config.DASHBOARD_KEY, httponly=True, samesite="lax", max_age=30*86400, secure=False)
+        return response
+    else:
+        # كلمة مرور خاطئة
+        return HTMLResponse("""
+        <script>
+            alert('ACCESS DENIED: Invalid Key');
+            window.location.href='/login';
+        </script>
+        """, status_code=401)
+
+# --- الحارس (Middleware) ---
 @app.middleware("http")
 async def dashboard_key_guard(request: Request, call_next):
     key=config.DASHBOARD_KEY
-    if not key or request.url.path=="/health":
+    
+    # إذا لم يتم تعيين كلمة سر، افتح الباب
+    if not key or request.url.path in ["/health", "/login", "/api/login"]:
         return await call_next(request)
+        
     supplied=request.query_params.get("key") or request.cookies.get("dash_key") or ""
+    
     if not hmac.compare_digest(supplied.encode(),key.encode()):
-        return JSONResponse({"detail":"unauthorized"},status_code=401)
+        # إذا كان الطلب لـ API، أعطه خطأ
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"detail":"unauthorized"},status_code=401)
+        # إذا كان الطلب لصفحة (الواجهة)، وجهه لشاشة الدخول
+        return RedirectResponse(url="/login")
+        
     response=await call_next(request)
+    # إذا دخل بالرابط المباشر، احفظ الكوكيز
     if request.query_params.get("key"):
         response.set_cookie("dash_key",key,httponly=True,samesite="lax",max_age=30*86400,
                             secure=request.headers.get("x-forwarded-proto")=="https")
