@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard with Liquid Glass UI, Trade Markers, SL/TP & Heatmap."""
+"""Ultimate FastAPI Dashboard with Dynamic Theme Switcher (Cyber, Matrix, Gold)."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -19,16 +19,72 @@ async def dashboard():
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
+    // ربط ألوان Tailwind بمتغيرات CSS لكي تتغير ديناميكياً
     tailwind.config = {
       darkMode: 'class',
-      theme: { extend: { colors: { brand: { bg: '#020308', card: '#0a0f1e', border: '#1e293b' }, neon: { cyan: '#00f3ff', green: '#00ff66', red: '#ff003c', purple: '#b026ff' } }, fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } } }
+      theme: { 
+        extend: { 
+          colors: { 
+            brand: { bg: 'var(--bg)', card: 'var(--glass-bg)', border: 'var(--glass-border)' }, 
+            neon: { 
+              cyan: 'var(--primary)', 
+              green: 'var(--up-color)', 
+              red: 'var(--down-color)', 
+              purple: 'var(--secondary)' 
+            } 
+          }, 
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } 
+        } 
+      }
     }
   </script>
   <style>
-    body { background-color: #020308; background-image: radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.08) 0%, transparent 60%), linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; }
+    /* --- Dynamic Theme Variables --- */
+    :root {
+        --bg: #020308;
+        --bg-grid: rgba(0, 243, 255, 0.02);
+        --primary: #00f3ff;
+        --secondary: #b026ff;
+        --glass-bg: rgba(10, 15, 30, 0.65);
+        --glass-border: rgba(0, 243, 255, 0.15);
+        --up-color: #00ff66;
+        --down-color: #ff003c;
+    }
+    
+    /* Cyberpunk Theme (Default) */
+    body.theme-cyber {
+        --bg: #020308;
+        --bg-grid: rgba(0, 243, 255, 0.02);
+        --primary: #00f3ff;
+        --secondary: #b026ff;
+        --up-color: #00ff66;
+        --down-color: #ff003c;
+    }
+
+    /* Matrix Theme */
+    body.theme-matrix {
+        --bg: #020a05;
+        --bg-grid: rgba(0, 255, 102, 0.03);
+        --primary: #00ff66;
+        --secondary: #00cc44;
+        --up-color: #00ff66;
+        --down-color: #ff003c;
+    }
+
+    /* Binance Gold Theme */
+    body.theme-gold {
+        --bg: #0b0e11;
+        --bg-grid: rgba(252, 213, 53, 0.03);
+        --primary: #FCD535;
+        --secondary: #F0B90B;
+        --up-color: #0ecb81;
+        --down-color: #f6465d;
+    }
+
+    body { background-color: var(--bg); background-image: radial-gradient(circle at 50% 0%, var(--bg-grid) 0%, transparent 60%), linear-gradient(var(--bg-grid) 1px, transparent 1px), linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; transition: background-color 0.5s ease; }
     
     /* Base Glass */
-    .glass { background: rgba(10, 15, 30, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(0, 243, 255, 0.15); box-shadow: 0 4px 30px rgba(0,0,0,0.5); }
+    .glass { background: var(--glass-bg); backdrop-filter: blur(16px); border: 1px solid var(--glass-border); box-shadow: 0 4px 30px rgba(0,0,0,0.5); transition: border-color 0.5s ease; }
     
     /* --- Liquid Glass Effects --- */
     .liquid-btn {
@@ -59,20 +115,23 @@ async def dashboard():
         box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), -3px -3px 12px rgba(0, 243, 255, 0.05), inset 0px 1px 1px rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 1rem;
+        transition: box-shadow 0.5s ease;
     }
 
-    .neon-glow { text-shadow: 0 0 10px currentColor; }
+    .neon-glow { text-shadow: 0 0 10px var(--primary); color: var(--primary); transition: color 0.5s ease; }
+    .neon-glow-secondary { text-shadow: 0 0 10px var(--secondary); color: var(--secondary); }
+    
     .scanline { position: relative; overflow: hidden; }
-    .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 4s linear infinite; }
+    .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--primary), transparent); animation: scan 4s linear infinite; }
     @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
     
-    .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(0, 243, 255, 0.1); }
+    .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid var(--glass-border); }
     .ticker { display: flex; white-space: nowrap; animation: ticker 40s linear infinite; }
     @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
     
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
     
     .progress-bg { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 6px; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
@@ -84,16 +143,17 @@ async def dashboard():
     .heatmap-cell.neutral { background: rgba(255, 255, 255, 0.1); }
   </style>
 </head>
-<body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
+<body class="theme-cyber text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
   <div class="max-w-md mx-auto px-4 pt-6">
     
     <header class="flex justify-between items-center mb-6">
-      <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
-      <div class="flex gap-2">
-        <!-- Liquid TEST Button -->
-        <button onclick="openBacktest()" class="px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider text-neon-purple liquid-btn">TEST</button>
-        <!-- Liquid Pause/Active Button -->
-        <button id="pause-btn" onclick="togglePause()" class="px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green">● ACTIVE</button>
+      <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow">AI QUANT <span class="neon-glow-secondary">X</span></h1>
+      <div class="flex gap-2 items-center">
+        <!-- Theme Switcher -->
+        <button onclick="cycleTheme()" class="px-2 py-2 rounded-full text-sm liquid-btn text-slate-300" title="Change Theme">🎨</button>
+        
+        <button onclick="openBacktest()" class="px-3 py-1.5 rounded-full text-xs font-bold font-orbitron tracking-wider text-neon-purple liquid-btn">TEST</button>
+        <button id="pause-btn" onclick="togglePause()" class="px-3 py-1.5 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green">● ACTIVE</button>
       </div>
     </header>
 
@@ -116,8 +176,8 @@ async def dashboard():
     <!-- LIVE CHART -->
     <section class="glass rounded-2xl p-4 mb-6 scanline relative">
       <div class="flex justify-between items-center mb-2 relative z-10">
-         <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">LIVE MARKET</h3>
-         <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-black/50 border border-slate-700 text-neon-cyan text-[10px] rounded px-2 py-1 outline-none font-mono">
+         <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest" style="color: var(--primary)">LIVE MARKET</h3>
+         <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-black/50 border border-slate-700 text-neon-cyan text-[10px] rounded px-2 py-1 outline-none font-mono" style="color: var(--primary)">
             <option value="BTCUSDT">BTC/USDT</option>
             <option value="ETHUSDT">ETH/USDT</option>
             <option value="SOLUSDT">SOL/USDT</option>
@@ -127,8 +187,8 @@ async def dashboard():
       <div id="tvchart" class="w-full h-56 rounded-lg overflow-hidden relative z-10"></div>
       
       <div id="loading-chart" class="absolute inset-0 flex flex-col items-center justify-center bg-[#020308]/80 z-20 hidden">
-        <div class="w-8 h-8 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin mb-2"></div>
-        <span class="text-neon-cyan font-mono text-[10px] animate-pulse">LOADING...</span>
+        <div class="w-8 h-8 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin mb-2" style="border-top-color: var(--primary)"></div>
+        <span class="text-neon-cyan font-mono text-[10px] animate-pulse" style="color: var(--primary)">LOADING...</span>
       </div>
     </section>
 
@@ -136,20 +196,18 @@ async def dashboard():
     <section class="grid grid-cols-2 gap-3 mb-6">
       <div class="liquid-card p-4">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
-        <p id="winrate" class="font-mono text-xl text-neon-purple font-bold neon-glow">--%</p>
+        <p id="winrate" class="font-mono text-xl font-bold neon-glow">--%</p>
       </div>
       <div class="liquid-card p-4">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Profit Factor</p>
-        <p id="pf" class="font-mono text-xl text-neon-purple font-bold neon-glow">--</p>
+        <p id="pf" class="font-mono text-xl font-bold neon-glow">--</p>
       </div>
     </section>
 
     <!-- PnL Heatmap -->
     <section class="glass rounded-xl p-4 mb-6">
       <h3 class="font-orbitron text-xs text-slate-300 tracking-widest mb-4 border-b border-slate-700 pb-2">30-DAY PnL HEATMAP</h3>
-      <div class="heatmap-grid" id="heatmap">
-        <!-- Cells injected by JS -->
-      </div>
+      <div class="heatmap-grid" id="heatmap"></div>
       <div class="flex justify-between items-center mt-3 text-[9px] text-slate-500 font-mono">
         <span>Less</span>
         <div class="flex gap-1">
@@ -210,7 +268,7 @@ async def dashboard():
   <div id="backtest-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="liquid-card w-full max-w-md p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
-      <h3 class="font-orbitron text-neon-purple text-lg mb-4 neon-glow">RUN BACKTEST</h3>
+      <h3 class="font-orbitron text-neon-purple text-lg mb-4 neon-glow" style="color: var(--secondary); text-shadow: 0 0 10px var(--secondary);">RUN BACKTEST</h3>
       <div class="space-y-4 mb-6">
         <select id="bt-symbol" class="w-full bg-brand-bg border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-neon-purple">
           <option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option>
@@ -219,7 +277,7 @@ async def dashboard():
           <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
         </select>
       </div>
-      <button onclick="runBacktest()" id="bt-run-btn" class="w-full liquid-btn text-neon-purple font-bold py-2 rounded-lg transition-all">Run Simulation</button>
+      <button onclick="runBacktest()" id="bt-run-btn" class="w-full liquid-btn font-bold py-2 rounded-lg transition-all" style="color: var(--secondary)">Run Simulation</button>
       <div id="bt-results" class="mt-4 text-xs font-mono whitespace-pre-wrap hidden bg-black/50 p-3 rounded-lg border border-slate-800 max-h-48 overflow-y-auto custom-scroll"></div>
     </div>
   </div>
@@ -230,6 +288,43 @@ let candleSeries = null;
 let currentSymbol = "BTCUSDT";
 let currentPositions = []; 
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+// --- Theme Logic ---
+const themes = ['theme-cyber', 'theme-matrix', 'theme-gold'];
+let currentThemeIndex = parseInt(localStorage.getItem('themeIndex') || '0');
+
+function applyTheme(index) {
+    document.body.className = document.body.className.replace(/theme-\w+/g, '').trim();
+    document.body.classList.add(themes[index]);
+    localStorage.setItem('themeIndex', index);
+    
+    // Update Chart Colors dynamically
+    if (tvChart && candleSeries) {
+        const styles = getComputedStyle(document.body);
+        const upColor = styles.getPropertyValue('--up-color').trim();
+        const downColor = styles.getPropertyValue('--down-color').trim();
+        
+        candleSeries.applyOptions({
+            upColor: upColor,
+            downColor: downColor,
+            wickUpColor: upColor,
+            wickDownColor: downColor
+        });
+        
+        // Reload chart to apply new line colors if needed
+        loadChartData(currentSymbol);
+    }
+}
+
+function cycleTheme() {
+    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+    applyTheme(currentThemeIndex);
+}
+
+// Apply saved theme on load
+document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(currentThemeIndex);
+});
 
 async function togglePause() {
     const btn = document.getElementById('pause-btn');
@@ -242,10 +337,10 @@ async function togglePause() {
 function updatePauseButton(isPaused) {
     const btn = document.getElementById('pause-btn');
     if (isPaused) {
-        btn.className = "px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-red";
+        btn.className = "px-3 py-1.5 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-red";
         btn.innerHTML = '■ PAUSED';
     } else {
-        btn.className = "px-4 py-2 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green";
+        btn.className = "px-3 py-1.5 rounded-full text-xs font-bold font-orbitron tracking-wider liquid-btn liquid-btn-green";
         btn.innerHTML = '● ACTIVE';
     }
 }
@@ -311,6 +406,9 @@ function initTVChart() {
     if(!chartElement) return;
     
     const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
+    const styles = getComputedStyle(document.body);
+    const upColor = styles.getPropertyValue('--up-color').trim();
+    const downColor = styles.getPropertyValue('--down-color').trim();
     
     tvChart = LightweightCharts.createChart(chartElement, {
         width: width,
@@ -323,11 +421,11 @@ function initTVChart() {
     });
     
     candleSeries = tvChart.addCandlestickSeries({
-        upColor: '#00ff66',
-        downColor: '#ff003c',
+        upColor: upColor,
+        downColor: downColor,
         borderVisible: false,
-        wickUpColor: '#00ff66',
-        wickDownColor: '#ff003c',
+        wickUpColor: upColor,
+        wickDownColor: downColor,
     });
     
     window.addEventListener('resize', () => {
