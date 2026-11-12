@@ -1,10 +1,9 @@
-"""Ultimate FastAPI Dashboard (Nexus Ultra) with LIVE Candlestick Charts."""
+"""Ultimate FastAPI Dashboard with Trade Markers, SL/TP Lines & PnL Heatmap."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
 from backtest import run_backtest, format_report
 import config
-import time
 
 router=APIRouter()
 
@@ -17,7 +16,6 @@ async def dashboard():
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>AI QUANT X · NEXUS ULTRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- TradingView Lightweight Charts (v4) -->
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
@@ -41,6 +39,13 @@ async def dashboard():
     .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
     .progress-bg { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 6px; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    
+    /* Heatmap styles */
+    .heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: rgba(255,255,255,0.05); }
+    .heatmap-cell.win { background: rgba(0, 255, 102, 0.8); }
+    .heatmap-cell.loss { background: rgba(255, 0, 60, 0.8); }
+    .heatmap-cell.neutral { background: rgba(255, 255, 255, 0.1); }
   </style>
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
@@ -69,7 +74,7 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- LIVE CANDLESTICK CHART -->
+    <!-- LIVE CHART WITH MARKERS & SL/TP -->
     <section class="glass rounded-2xl p-4 mb-6 scanline relative">
       <div class="flex justify-between items-center mb-2 relative z-10">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">LIVE MARKET</h3>
@@ -96,6 +101,24 @@ async def dashboard():
       <div class="glass rounded-xl p-3 scanline">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Profit Factor</p>
         <p id="pf" class="font-mono text-xl text-neon-purple font-bold neon-glow">--</p>
+      </div>
+    </section>
+
+    <!-- PnL Heatmap -->
+    <section class="glass rounded-xl p-4 mb-6">
+      <h3 class="font-orbitron text-xs text-slate-300 tracking-widest mb-4 border-b border-slate-700 pb-2">30-DAY PnL HEATMAP</h3>
+      <div class="heatmap-grid" id="heatmap">
+        <!-- Cells injected by JS -->
+      </div>
+      <div class="flex justify-between items-center mt-3 text-[9px] text-slate-500 font-mono">
+        <span>Less</span>
+        <div class="flex gap-1">
+            <div class="w-2.5 h-2.5 bg-slate-800 rounded-sm"></div>
+            <div class="w-2.5 h-2.5 bg-neon-green/40 rounded-sm"></div>
+            <div class="w-2.5 h-2.5 bg-neon-green/80 rounded-sm"></div>
+            <div class="w-2.5 h-2.5 bg-neon-green rounded-sm"></div>
+        </div>
+        <span>More</span>
       </div>
     </section>
 
@@ -164,6 +187,7 @@ async def dashboard():
 let tvChart = null;
 let candleSeries = null;
 let currentSymbol = "BTCUSDT";
+let currentPositions = []; // لتخزين الصفقات المفتوحة لرسم الخطوط
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 async function togglePause() {
@@ -249,7 +273,7 @@ function initTVChart() {
     
     tvChart = LightweightCharts.createChart(chartElement, {
         width: width,
-        height: 224, // تم زيادة الارتفاع قليلاً للشموع
+        height: 224,
         layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#64748b' },
         grid: { vertLines: { color: 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: 'rgba(255, 255, 255, 0.02)' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
@@ -257,7 +281,6 @@ function initTVChart() {
         timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
     });
     
-    // تحويل الرسم البياني إلى شموع يابانية
     candleSeries = tvChart.addCandlestickSeries({
         upColor: '#00ff66',
         downColor: '#ff003c',
@@ -270,7 +293,6 @@ function initTVChart() {
         tvChart.applyOptions({ width: chartElement.clientWidth });
     });
     
-    // تحميل البيانات الأولية
     loadChartData(currentSymbol);
 }
 
@@ -285,6 +307,33 @@ async function loadChartData(symbol) {
         if(data && data.length > 0) {
             candleSeries.setData(data);
             tvChart.timeScale().fitContent();
+            
+            // مسح الخطوط القديمة
+            candleSeries.setMarkers([]);
+            
+            // رسم خطوط الصفقات المفتوحة والعلامات
+            const symbolPositions = currentPositions.filter(p => p.symbol === symbol);
+            let markers = [];
+            
+            symbolPositions.forEach(pos => {
+                const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
+                
+                // إضافة السهم
+                markers.push({
+                    time: entryTime,
+                    position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
+                    color: pos.side === 'LONG' ? '#00ff66' : '#ff003c',
+                    shape: pos.side === 'LONG' ? 'arrowUp' : 'arrowDown',
+                    text: pos.side
+                });
+                
+                // إضافة خطوط المستويات
+                candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#00f3ff', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' });
+                candleSeries.createPriceLine({ price: Number(pos.stop_price), color: '#ff003c', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' });
+                candleSeries.createPriceLine({ price: Number(pos.target_price), color: '#00ff66', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' });
+            });
+            
+            candleSeries.setMarkers(markers);
         }
     } catch(e) {
         console.error("Failed to load chart data", e);
@@ -296,6 +345,37 @@ async function loadChartData(symbol) {
 function changeChartSymbol() {
     currentSymbol = document.getElementById('chart-symbol').value;
     loadChartData(currentSymbol);
+}
+
+async function updateHeatmap(trades) {
+    const heatmapContainer = document.getElementById('heatmap');
+    let dayStats = {};
+    
+    // تجميع الصفقات حسب اليوم
+    trades.filter(t => t.status === 'CLOSED' && t.closed_at).forEach(t => {
+        const date = t.closed_at.split('T')[0];
+        if(!dayStats[date]) dayStats[date] = 0;
+        dayStats[date] += Number(t.net_pnl) || 0;
+    });
+    
+    let html = '';
+    let today = new Date();
+    
+    // إنشاء خريطة لآخر 35 يوم (5 أسابيع)
+    for(let i = 34; i >= 0; i--) {
+        let d = new Date(today);
+        d.setDate(today.getDate() - i);
+        let dateStr = d.toISOString().split('T')[0];
+        let pnl = dayStats[dateStr] || 0;
+        
+        let cellClass = 'neutral';
+        if (pnl > 0) cellClass = 'win';
+        else if (pnl < 0) cellClass = 'loss';
+        
+        // opacity based on size (optional complexity, keeping it simple here)
+        html += `<div class="heatmap-cell ${cellClass}" title="${dateStr}: ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)} USDT"></div>`;
+    }
+    heatmapContainer.innerHTML = html;
 }
 
 async function load(){
@@ -317,6 +397,9 @@ async function load(){
   const decisions = results[5].status === 'fulfilled' ? results[5].value : [];
   const trades = results[6].status === 'fulfilled' ? results[6].value : [];
 
+  // تحديث الصفقات الحالية للرسم البياني
+  currentPositions = ps;
+
   updatePauseButton(status.paused);
   document.getElementById('total-equity').textContent = fmt(p.equity);
   
@@ -332,6 +415,9 @@ async function load(){
 
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = (perf.profit_factor === null ? '∞' : (perf.profit_factor ? fmt(perf.profit_factor) : '0.00'));
+
+  // Update Heatmap
+  updateHeatmap(trades);
 
   // Strategy Performance
   const stratContainer = document.getElementById('strategy-stats');
@@ -429,6 +515,12 @@ async function load(){
     }).join('');
   }
 
+  // Update Chart Lines if new position opened for current symbol
+  const currentSymbolPos = ps.find(p => p.symbol === currentSymbol);
+  if (currentSymbolPos) {
+      loadChartData(currentSymbol); // Re-draw chart with new lines
+  }
+
  }catch(e){ console.error('System Error:', e); }
 }
 
@@ -438,8 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
     load(); 
     setInterval(load, 3000);
     setInterval(loadLiveTickers, 10000);
-    // تحديث الشموع كل 15 ثانية
-    setInterval(() => { loadChartData(currentSymbol); }, 15000);
+    setInterval(() => { loadChartData(currentSymbol); }, 30000); // تحديث الشموع كل 30 ثانية
 });
 </script>
 </body>
@@ -479,19 +570,16 @@ async def live_tickers(request: Request):
     except Exception:
         return []
 
-# --- دالة جديدة لجلب الشموع للواجهة ---
 @router.get("/api/market_klines")
 async def market_klines(request: Request, symbol: str = "BTCUSDT", interval: str = "15m"):
     try:
         market = request.app.state.engine.market
-        # جلب 100 شمعة
         df = await market.get_klines(symbol, interval, 100, "futures")
         
-        # تحويل البيانات إلى الشكل الذي يتوقعه TradingView (Unix Timestamp بالثواني)
         data = []
         for _, row in df.iterrows():
             data.append({
-                "time": int(row["timestamp"]) // 1000, # تحويل إلى ثواني
+                "time": int(row["timestamp"]) // 1000, 
                 "open": float(row["open"]),
                 "high": float(row["high"]),
                 "low": float(row["low"]),
