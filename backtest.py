@@ -32,7 +32,7 @@ def _htf_directions(ind, ts, base_ms, htf_ms=4 * 3600000):
 def run_backtest(df, strategies=None, source="futures", initial_balance=None, warmup=120,
                  fee=None, slippage_bps=None, trailing=None, risk_pct=None, alloc_pct=None):
     initial = float(initial_balance or config.INITIAL_BALANCE)
-    fee = config.FEE_RATE if fee is None else fee
+    fee = config.fee_rate(source) if fee is None else fee
     slip = (config.SLIPPAGE_BPS if slippage_bps is None else slippage_bps) / 10000
     trailing = config.TRAILING_ENABLED if trailing is None else trailing
     risk_pct = config.RISK_PER_TRADE_PCT if risk_pct is None else risk_pct
@@ -146,7 +146,8 @@ def run_backtest(df, strategies=None, source="futures", initial_balance=None, wa
                     close_pos(i, pos["target"], "TAKE_PROFIT")
                     
             if pos:
-                pos["stop"] = next_stop(pos["side"], pos["entry"], pos["initial_stop"], pos["stop"], cl[i], trailing)
+                # --- تم تمرير fee هنا ---
+                pos["stop"] = next_stop(pos["side"], pos["entry"], pos["initial_stop"], pos["stop"], cl[i], trailing, fee)
             if pos and i == n - 1:
                 close_pos(i, cl[i], "END_OF_DATA")
 
