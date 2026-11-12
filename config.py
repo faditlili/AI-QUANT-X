@@ -27,12 +27,11 @@ SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
 # --- القائمة النخبة: أفضل 30 عملة من حيث السيولة والثقل ---
-# (تم اختيارها بعناية لتجنب التلاعب وضمان احترام المؤشرات الفنية)
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
-    "MATICUSDT,TONUSDT,SHIBUSDT,LTCUSDT,BCHUSDT,UNIUSDT,NEARUSDT,APTUSDT,ICPUSDT,SUIUSDT,"
-    "ARBUSDT,OPUSDT,INJUSDT,ATOMUSDT,FILUSDT,STXUSDT,IMXUSDT,RNDRUSDT,FETUSDT,WLDUSDT"
+    "POLUSDT,TONUSDT,SHIBUSDT,LTCUSDT,BCHUSDT,UNIUSDT,NEARUSDT,APTUSDT,ICPUSDT,SUIUSDT,"
+    "ARBUSDT,OPUSDT,INJUSDT,ATOMUSDT,FILUSDT,STXUSDT,IMXUSDT,RENDERUSDT,FETUSDT,WLDUSDT"
 ).split(",") if s.strip())
 
 MARKET_SOURCES = ("spot", "futures")
@@ -49,7 +48,7 @@ EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
-MAX_OPEN_POSITIONS = 5  # يمكنك زيادتها إلى 5 إذا أردت فتح صفقات أكثر في نفس الوقت
+MAX_OPEN_POSITIONS = 5
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
@@ -83,11 +82,17 @@ DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
 RISK_PER_TRADE_PCT = 1.0     # <--- مخاطرة 1% (2 دولار في الصفقة)
 MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 30.0    # <--- سقف الصفقة 30% (60 دولار) لتحقيق أرباح ملموسة
+MAX_ALLOCATION_PCT = 30.0    # <--- سقف الصفقة 30% (60 دولار)
 DAILY_LOSS_LIMIT_PCT = 3.0
 FEE_RATE = 0.0004            # <--- عمولة بينانس فيوتشرز
+FEE_RATE_SPOT = 0.001        # عمولة السبوت (0.1%)
+
+def fee_rate(source):
+    return FEE_RATE if source == "futures" else FEE_RATE_SPOT
+
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
+MIN_TARGET_PCT = 0.8   # أقل مسافة للهدف (% من السعر) حتى لا تأكل العمولات الربح
 REWARD_RISK_RATIO = 2.0
 MAX_NEWS_RISK = 0.70
 
@@ -100,7 +105,7 @@ NEWS_TIMEOUT_SECONDS = 10
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "")
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
 USER_AGENT = "AI-QUANT-X-Paper/4.1"
