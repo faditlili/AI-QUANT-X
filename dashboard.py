@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - SaaS Edition with 7-Day Bar Chart & Quick Stats."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -26,7 +26,7 @@ async def dashboard():
         extend: { 
           colors: { 
             brand: { bg: '#f8fafc', card: '#ffffff', border: '#e2e8f0', text: '#0f172a', muted: '#64748b' },
-            green: '#10b981', red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6'
+            green: '#10b981', red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6', neutral: '#94a3b8'
           }, 
           fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'] } 
         } 
@@ -50,12 +50,13 @@ async def dashboard():
 
   <div id="toast-container" class="fixed top-4 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
 
-  <!-- Top Navigation (Sticky & Compact) -->
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14">
         <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md">X</div>
+            <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md">
+                <i data-lucide="cpu" class="w-4 h-4"></i>
+            </div>
             <span class="font-bold text-base tracking-tight">AI QUANT</span>
         </div>
         <div class="flex gap-2">
@@ -63,7 +64,6 @@ async def dashboard():
             <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
-      <!-- Tabs -->
       <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview</button>
         <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-4 h-4"></i> Positions</button>
@@ -75,9 +75,7 @@ async def dashboard():
 
   <div class="max-w-md mx-auto px-4 pt-4">
     
-    <!-- OVERVIEW TAB -->
     <div id="tab-overview" class="space-y-4">
-        <!-- Main Balance -->
         <section class="card p-5 relative overflow-hidden">
             <div class="absolute top-0 right-0 p-4 opacity-5"><i data-lucide="wallet" class="w-24 h-24"></i></div>
             <p class="text-slate-500 text-xs font-medium mb-1">Total Balance</p>
@@ -86,13 +84,12 @@ async def dashboard():
                 <span class="text-slate-500 text-xs mb-1 font-medium">USDT</span>
             </div>
             <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10">
-                <i data-lucide="trending-up" class="w-3.5 h-3.5" id="pnl-icon"></i>
-                <span id="pnl-value">+0.00 USDT</span>
+                <i data-lucide="minus" class="w-3.5 h-3.5" id="pnl-icon"></i>
+                <span id="pnl-value">0.00 USDT</span>
                 <span id="pnl-percent" class="opacity-70">(0.00%)</span>
             </div>
         </section>
 
-        <!-- Stats Grid with Donut Charts -->
         <section class="grid grid-cols-2 gap-3">
             <div class="card p-3 flex flex-col items-center justify-center">
                 <h3 class="text-[11px] font-semibold text-slate-500 mb-1">Win Rate</h3>
@@ -114,7 +111,6 @@ async def dashboard():
             </div>
         </section>
 
-        <!-- NEW: Weekly Performance Bar Chart -->
         <section class="card p-4">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i> Weekly Performance</h3>
@@ -123,7 +119,7 @@ async def dashboard():
             <div class="h-32 w-full">
                 <canvas id="weeklyChart"></canvas>
             </div>
-            <!-- Quick Stats under Chart -->
+            
             <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
                 <div class="text-center">
                     <p class="text-[10px] text-slate-400 uppercase font-semibold">Trades</p>
@@ -131,16 +127,15 @@ async def dashboard():
                 </div>
                 <div class="text-center border-x border-slate-100">
                     <p class="text-[10px] text-slate-400 uppercase font-semibold">Best Trade</p>
-                    <p id="stat-best" class="text-sm font-bold text-green-600">+0.00</p>
+                    <p id="stat-best" class="text-sm font-bold text-slate-800">0.00</p>
                 </div>
                 <div class="text-center">
                     <p class="text-[10px] text-slate-400 uppercase font-semibold">Worst Trade</p>
-                    <p id="stat-worst" class="text-sm font-bold text-red-600">-0.00</p>
+                    <p id="stat-worst" class="text-sm font-bold text-slate-800">0.00</p>
                 </div>
             </div>
         </section>
 
-        <!-- Chart -->
         <section class="card p-4">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-sm font-semibold text-slate-800">Market Chart</h3>
@@ -154,7 +149,6 @@ async def dashboard():
             <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden"></div>
         </section>
 
-        <!-- Market Breadth (Compact) -->
         <section class="card p-3 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <i data-lucide="bar-chart" class="w-4 h-4 text-slate-400"></i>
@@ -162,13 +156,12 @@ async def dashboard():
             </div>
             <div class="flex items-center gap-3 w-1/2">
                 <div class="w-full bg-slate-100 rounded-full h-1.5 flex-1">
-                    <div id="breadth-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 50%"></div>
+                    <div id="breadth-bar" class="bg-slate-500 h-1.5 rounded-full transition-all duration-500" style="width: 50%"></div>
                 </div>
                 <span id="breadth-label" class="text-[10px] font-bold text-slate-800 w-12 text-right">50%</span>
             </div>
         </section>
 
-        <!-- Market Watch -->
         <section class="card p-4">
             <h3 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4 text-slate-400"></i> Market Watch</h3>
             <div class="h-36 overflow-y-auto custom-scroll pr-1" id="market-watch">
@@ -177,7 +170,6 @@ async def dashboard():
         </section>
     </div>
 
-    <!-- POSITIONS TAB -->
     <div id="tab-positions" class="hidden space-y-3">
         <div class="flex justify-between items-center mb-1">
             <h3 class="text-lg font-bold text-slate-800">Active Positions</h3>
@@ -186,7 +178,6 @@ async def dashboard():
         <div id="active-positions-list" class="space-y-3"></div>
     </div>
 
-    <!-- HISTORY TAB -->
     <div id="tab-history" class="hidden space-y-3">
         <h3 class="text-lg font-bold text-slate-800 mb-1">Trade History</h3>
         <div class="card overflow-hidden" id="trade-history">
@@ -194,7 +185,6 @@ async def dashboard():
         </div>
     </div>
 
-    <!-- LOGS TAB -->
     <div id="tab-logs" class="hidden space-y-3">
         <h3 class="text-lg font-bold text-slate-800 mb-1">AI Neural Logs</h3>
         <div class="card p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll bg-slate-900 text-slate-300 rounded-xl" id="neural-logs">
@@ -204,7 +194,6 @@ async def dashboard():
 
   </div>
 
-  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
       <div class="flex justify-between items-center mb-4">
@@ -373,10 +362,10 @@ function initCharts() {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw >= 0 ? '+' : ''}${fmt(ctx.raw)} USDT` } } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw > 0 ? '+' : ''}${fmt(ctx.raw)} USDT` } } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
-                y: { display: false, grace: '15%' } // Hide Y-axis for clean look
+                y: { display: false, grace: '15%' } 
             }
         }
     });
@@ -389,10 +378,12 @@ async function loadLiveTickers() {
         if(data.length > 0) {
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
-                const isUp = d.change >= 0;
-                const textColor = isUp ? 'text-green-600' : 'text-red-600';
-                const bgColor = isUp ? 'bg-green-50' : 'bg-red-50';
-                const sign = isUp ? '+' : '';
+                let textColor = 'text-slate-500';
+                let bgColor = 'bg-slate-50';
+                let sign = '';
+                if (d.change > 0) { textColor = 'text-green-600'; bgColor = 'bg-green-50'; sign = '+'; }
+                else if (d.change < 0) { textColor = 'text-red-600'; bgColor = 'bg-red-50'; }
+
                 return `
                 <div class="flex justify-between items-center p-1.5 rounded-md ${bgColor} mb-1">
                     <span class="font-bold text-slate-800 text-[11px]">${d.symbol}</span>
@@ -436,13 +427,10 @@ async function loadChartData(symbol) {
 
 function changeChartSymbol() { currentSymbol = document.getElementById('chart-symbol').value; loadChartData(currentSymbol); }
 
-// Function to update Weekly Chart & Quick Stats
 function updateWeeklyStats(trades) {
     const closedTrades = trades.filter(t => t.status === 'CLOSED' && t.closed_at);
     
-    // Last 7 days labels
     let days = [];
-    let dayStats = {};
     let today = new Date();
     
     for(let i = 6; i >= 0; i--) {
@@ -453,7 +441,6 @@ function updateWeeklyStats(trades) {
         days.push({ date: dateStr, label: dayName, pnl: 0 });
     }
 
-    // Group trades by day
     closedTrades.forEach(t => {
         const date = t.closed_at.split('T')[0];
         let dayIndex = days.findIndex(d => d.date === date);
@@ -462,10 +449,9 @@ function updateWeeklyStats(trades) {
         }
     });
 
-    // Update Chart Data
     const labels = days.map(d => d.label);
     const data = days.map(d => d.pnl);
-    const bgColors = data.map(v => v >= 0 ? '#10b981' : '#ef4444'); // Green for win, Red for loss
+    const bgColors = data.map(v => v > 0 ? '#10b981' : (v < 0 ? '#ef4444' : '#cbd5e1'));
     
     if(weeklyChart) {
         weeklyChart.data.labels = labels;
@@ -474,14 +460,31 @@ function updateWeeklyStats(trades) {
         weeklyChart.update();
     }
 
-    // Update Quick Stats
     const totalTrades = closedTrades.length;
     const bestTrade = closedTrades.length > 0 ? Math.max(...closedTrades.map(t => Number(t.net_pnl))) : 0;
     const worstTrade = closedTrades.length > 0 ? Math.min(...closedTrades.map(t => Number(t.net_pnl))) : 0;
 
     document.getElementById('stat-trades').textContent = totalTrades;
-    document.getElementById('stat-best').textContent = `+${fmt(bestTrade)}`;
-    document.getElementById('stat-worst').textContent = `${fmt(worstTrade)}`;
+    
+    // Best Trade Logic
+    const bestEl = document.getElementById('stat-best');
+    if (bestTrade > 0) {
+        bestEl.className = "text-sm font-bold text-green-600";
+        bestEl.textContent = `+${fmt(bestTrade)}`;
+    } else {
+        bestEl.className = "text-sm font-bold text-slate-600";
+        bestEl.textContent = `0.00`;
+    }
+
+    // Worst Trade Logic
+    const worstEl = document.getElementById('stat-worst');
+    if (worstTrade < 0) {
+        worstEl.className = "text-sm font-bold text-red-600";
+        worstEl.textContent = `${fmt(worstTrade)}`;
+    } else {
+        worstEl.className = "text-sm font-bold text-slate-600";
+        worstEl.textContent = `0.00`;
+    }
 }
 
 async function load(){
@@ -508,30 +511,33 @@ async function load(){
   updatePauseButton(status.paused);
   
   document.getElementById('total-equity').textContent = fmt(p.equity);
+  
   const pnlVal = p.unrealized_pnl + p.realized_pnl;
   const pnlPercent = (pnlVal / 200) * 100;
   const pnlDisplay = document.getElementById('pnl-display');
   const pnlIcon = document.getElementById('pnl-icon');
   
-  document.getElementById('pnl-value').textContent = `${pnlVal >= 0 ? '+' : ''}${fmt(pnlVal)} USDT`;
-  document.getElementById('pnl-percent').textContent = `(${pnlVal >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
-  
-  if(pnlVal > 0) {
+  // PnL Final Logic
+  if (pnlVal > 0) {
+      document.getElementById('pnl-value').textContent = `+${fmt(pnlVal)} USDT`;
+      document.getElementById('pnl-percent').textContent = `(+${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'trending-up');
-  } else if(pnlVal < 0) {
+  } else if (pnlVal < 0) {
+      document.getElementById('pnl-value').textContent = `${fmt(pnlVal)} USDT`;
+      document.getElementById('pnl-percent').textContent = `(${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-700 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'trending-down');
   } else {
+      document.getElementById('pnl-value').textContent = `0.00 USDT`;
+      document.getElementById('pnl-percent').textContent = `(0.00%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 relative z-10";
       pnlIcon.setAttribute('data-lucide', 'minus');
   }
   lucide.createIcons();
 
-  // Update Weekly Chart & Stats
   updateWeeklyStats(trades);
 
-  // Breadth
   const breadth = risk.breadth || 50;
   const breadthBar = document.getElementById('breadth-bar');
   const breadthLabel = document.getElementById('breadth-label');
@@ -540,17 +546,18 @@ async function load(){
   else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.className = 'text-[10px] font-bold text-red-600 w-12 text-right'; }
   else { breadthBar.className = 'bg-blue-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.className = 'text-[10px] font-bold text-blue-600 w-12 text-right'; }
 
-  // Update Donut Charts
   let wr = perf.win_rate || 0;
   document.getElementById('winrate').textContent = wr.toFixed(0) + '%';
   if(winrateChart) winrateChart.data.datasets[0].data = [wr, 100 - wr], winrateChart.update();
 
-  let pf = perf.profit_factor || 0;
-  document.getElementById('pf').textContent = (perf.profit_factor === null ? '∞' : pf.toFixed(2));
-  let pfPct = Math.min((pf / 3) * 100, 100);
+  let pfVal = perf.profit_factor;
+  let pfText = (pfVal === null ? '∞' : pfVal.toFixed(2));
+  document.getElementById('pf').textContent = pfText;
+  let pfPct = 0;
+  if (pfVal === null) pfPct = 100;
+  else if (pfVal > 0) pfPct = Math.min((pfVal / 3) * 100, 100);
   if(pfChart) pfChart.data.datasets[0].data = [pfPct, 100 - pfPct], pfChart.update();
 
-  // Positions with Live PnL
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
   if(ps.length === 0) {
@@ -563,9 +570,11 @@ async function load(){
         const sideMultiplier = pos.side === 'LONG' ? 1 : -1;
         const unrealizedPnl = (currentPrice - entryPrice) * qty * sideMultiplier;
         
-        const pnlColor = unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600';
-        const pnlSign = unrealizedPnl >= 0 ? '+' : '';
-        const pnlBg = unrealizedPnl >= 0 ? 'bg-green-50' : 'bg-red-50';
+        let pnlColor = 'text-slate-600';
+        let pnlBg = 'bg-slate-100';
+        let pnlSign = '';
+        if (unrealizedPnl > 0) { pnlColor = 'text-green-600'; pnlBg = 'bg-green-50'; pnlSign = '+'; }
+        else if (unrealizedPnl < 0) { pnlColor = 'text-red-600'; pnlBg = 'bg-red-50'; }
 
         return `
       <div class="card p-3 border-l-4 ${pos.side === 'LONG' ? 'border-l-green-500' : 'border-l-red-500'}">
@@ -595,7 +604,6 @@ async function load(){
     `}).join('');
   }
 
-  // History Table
   const histContainer = document.getElementById('trade-history');
   const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 10);
   if(closedTrades.length === 0) {
@@ -606,19 +614,22 @@ async function load(){
           <tr><th class="p-2">Asset</th><th class="p-2">Side</th><th class="p-2 text-right">Entry</th><th class="p-2 text-right">Net PnL</th></tr>
         </thead><tbody>`;
       closedTrades.forEach(t => {
-          const isWin = Number(t.net_pnl) > 0;
+          let pnlClass = 'text-slate-600';
+          let pnlSign = '';
+          if (t.net_pnl > 0) { pnlClass = 'text-green-600'; pnlSign = '+'; }
+          else if (t.net_pnl < 0) { pnlClass = 'text-red-600'; }
+
           html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
               <td class="p-2 font-bold text-slate-800 text-[11px]">${t.symbol}</td>
               <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${t.side}</span></td>
               <td class="p-2 text-right font-mono text-[11px]">${Number(t.entry_price).toFixed(2)}</td>
-              <td class="p-2 text-right font-mono font-bold text-[11px] ${isWin ? 'text-green-600' : 'text-red-600'}">${isWin ? '+' : ''}${fmt(t.net_pnl)}</td>
+              <td class="p-2 text-right font-mono font-bold text-[11px] ${pnlClass}">${pnlSign}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
       html += '</tbody></table>';
       histContainer.innerHTML = html;
   }
 
-  // Logs
   const logContainer = document.getElementById('neural-logs');
   if(decisions.length === 0) {
     logContainer.innerHTML = '<div class="text-slate-500">No scans yet...</div>';
