@@ -87,7 +87,7 @@ class Engine:
         
         if open_symbols:
             # عتبة 0.98 = الفلتر شبه معطّل عملياً؛ خفّضها (مثلاً 0.85) لمنع الصفقات المترابطة
-            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.98)
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.85)
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
