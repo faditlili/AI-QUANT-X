@@ -1,4 +1,4 @@
-"""FastAPI dashboard with Institutional UI (Market Watch Grid) & Robust Fetching."""
+"""FastAPI dashboard with Institutional UI, Fixed Chart and Infinity Profit Factor."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio
@@ -269,7 +269,9 @@ async function load(){
   pnlDisplay.className = pnlVal > 0 ? "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.2)]" : (pnlVal < 0 ? "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.2)]" : "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-slate-800/50");
 
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
-  document.getElementById('pf').textContent = perf.profit_factor ? fmt(perf.profit_factor) : '0.00';
+  
+  // --- تعديل كلود هنا: إظهار علامة اللانهاية بدلاً من 0.00 ---
+  document.getElementById('pf').textContent = (perf.profit_factor === null ? '∞' : (perf.profit_factor ? fmt(perf.profit_factor) : '0.00'));
 
   // Active Positions (Fixed Layout)
   const posContainer = document.getElementById('active-positions-list');
