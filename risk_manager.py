@@ -23,7 +23,8 @@ class RiskManager:
 
     def protection_status(self):
         """Loss-streak pause and max-drawdown stop. Returns (blocked, reason)."""
-        closed=[t for t in self.db.get_recent_trades(config.MAX_CONSECUTIVE_LOSSES*3) if t["status"]=="CLOSED"]
+        closed=sorted([t for t in self.db.get_recent_trades(config.MAX_CONSECUTIVE_LOSSES*6) if t["status"]=="CLOSED"],
+                      key=lambda t:t["closed_at"] or "",reverse=True)
         last=closed[:config.MAX_CONSECUTIVE_LOSSES]
         if len(last)==config.MAX_CONSECUTIVE_LOSSES and all((t["net_pnl"] or 0)<0 for t in last):
             try:
@@ -67,12 +68,14 @@ class RiskManager:
         stop_mult=stop_mult or config.ATR_STOP_MULTIPLIER
         rr=rr or config.REWARD_RISK_RATIO
         stop_dist=atr*stop_mult
+        if stop_dist*rr/price*100<config.MIN_TARGET_PCT:
+            return None, "Target too small vs. costs"
         stop=price-stop_dist if side=="LONG" else price+stop_dist
         risk_budget=min(p["equity"]*config.RISK_PER_TRADE_PCT/100,status["risk_remaining"])
         allocation=p["equity"]*config.MAX_ALLOCATION_PCT/100
         qty=min(risk_budget/stop_dist,allocation/price)
         notional=qty*price
-        fee=notional*config.FEE_RATE
+        fee=notional*config.fee_rate(source)
         if qty<=0 or notional+fee>p["cash_balance"]:
             return None, "Insufficient virtual cash"
         return {"quantity":qty,"stop_price":stop,
