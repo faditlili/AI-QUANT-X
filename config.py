@@ -26,7 +26,7 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
-# --- القائمة النخبة: أفضل 30 عملة من حيث السيولة والثقل ---
+# --- القائمة النخبة: أفضل 30 عملة (تم تحديثها بناءً على تعديلات Binance) ---
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
@@ -80,19 +80,21 @@ BACKTEST_INTERVAL = "1h"
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = 1.0     # <--- مخاطرة 1% (2 دولار في الصفقة)
+RISK_PER_TRADE_PCT = 1.0     # مخاطرة 1% (2 دولار)
 MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 100.0    # <--- سقف الصفقة 30% (60 دولار)
+MAX_ALLOCATION_PCT = 100.0   # <--- تم التعديل إلى 100% لكي نسمح للصفقات بالكبر
 DAILY_LOSS_LIMIT_PCT = 3.0
-FEE_RATE = 0.0004            # <--- عمولة بينانس فيوتشرز
-FEE_RATE_SPOT = 0.001        # عمولة السبوت (0.1%)
+
+# Fees
+FEE_RATE = 0.0004            # عمولة الفيوتشرز
+FEE_RATE_SPOT = 0.001        # عمولة السبوت
 
 def fee_rate(source):
     return FEE_RATE if source == "futures" else FEE_RATE_SPOT
 
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
-MIN_TARGET_PCT = 0.8   # أقل مسافة للهدف (% من السعر) حتى لا تأكل العمولات الربح
+MIN_TARGET_PCT = 0.5         # <--- تم التعديل إلى 0.5% لكي لا يرفض البوت الصفقات
 REWARD_RISK_RATIO = 2.0
 MAX_NEWS_RISK = 0.70
 
@@ -105,24 +107,22 @@ NEWS_TIMEOUT_SECONDS = 10
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "") 
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
 USER_AGENT = "AI-QUANT-X-Paper/4.1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# --- Advanced Filters (Arsenal Phase 1) ---
+# --- Advanced Filters ---
 USE_FUNDING_RATE_FILTER = True
 MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
 
-# --- Trading Sessions (UTC) ---
 USE_SESSION_FILTER = False
 LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
-# --- Scale-Out (Partial Profit Taking Phase 3) ---
 SCALE_OUT_ENABLED = False
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
