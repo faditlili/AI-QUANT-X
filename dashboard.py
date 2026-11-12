@@ -16,13 +16,12 @@ async def dashboard():
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>AI QUANT X · NEXUS ULTRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- TradingView Lightweight Charts -->
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
-      theme: { extend: { colors: { brand: { bg: '#020308', card: '#0a0f1e', border: '#1e293b' }, neon: { cyan: '#00f3ff', green: '#00ff66', red: '#ff003c', purple: '#b026ff', gold: '#ffd700' } }, fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } } }
+      theme: { extend: { colors: { brand: { bg: '#020308', card: '#0a0f1e', border: '#1e293b' }, neon: { cyan: '#00f3ff', green: '#00ff66', red: '#ff003c', purple: '#b026ff' } }, fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } } }
     }
   </script>
   <style>
@@ -32,18 +31,12 @@ async def dashboard():
     .scanline { position: relative; overflow: hidden; }
     .scanline::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scan 4s linear infinite; }
     @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
-    
-    /* Ticker */
     .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(0, 243, 255, 0.1); }
     .ticker { display: flex; white-space: nowrap; animation: ticker 40s linear infinite; }
     @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
-    
-    /* Custom Scrollbar */
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
-    
-    /* Strategy Progress Bars */
     .progress-bg { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 6px; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
   </style>
@@ -51,7 +44,6 @@ async def dashboard():
 <body class="text-slate-200 font-sans antialiased min-h-screen pb-10 selection:bg-neon-cyan selection:text-black">
   <div class="max-w-md mx-auto px-4 pt-6">
     
-    <!-- Header -->
     <header class="flex justify-between items-center mb-6">
       <h1 class="font-orbitron font-black text-2xl text-white tracking-widest neon-glow" style="text-shadow: 0 0 15px #00f3ff;">AI QUANT <span class="text-neon-purple" style="text-shadow: 0 0 15px #b026ff;">X</span></h1>
       <div class="flex gap-2">
@@ -60,14 +52,12 @@ async def dashboard():
       </div>
     </header>
 
-    <!-- Live Ticker -->
     <div class="ticker-wrap mb-6 py-2">
       <div class="ticker" id="ticker-content">
-        <span class="mx-4 font-mono text-sm text-slate-400">Connecting to Binance...</span>
+        <span class="mx-4 font-mono text-sm text-slate-400">Connecting...</span>
       </div>
     </div>
 
-    <!-- Balance -->
     <section class="text-center mb-8">
       <p class="text-slate-400 text-[10px] uppercase tracking-[0.2em] mb-1 font-mono">Total Estimated Value (USDT)</p>
       <h2 id="total-equity" class="font-mono text-5xl font-bold text-white tracking-tight mb-2">0.00</h2>
@@ -77,7 +67,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- TradingView Equity Chart -->
     <section class="glass rounded-2xl p-4 mb-6 scanline relative">
       <div class="flex justify-between items-center mb-2 relative z-10">
          <h3 class="font-orbitron text-xs text-neon-cyan tracking-widest">EQUITY CURVE</h3>
@@ -90,7 +79,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Stats -->
     <section class="grid grid-cols-2 gap-3 mb-6">
       <div class="glass rounded-xl p-3 scanline">
         <p class="text-[10px] text-slate-400 font-mono uppercase mb-1">Win Rate</p>
@@ -102,7 +90,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Strategy Performance -->
     <section class="glass rounded-xl p-4 mb-6">
       <h3 class="font-orbitron text-xs text-slate-300 tracking-widest mb-4 border-b border-slate-700 pb-2">STRATEGY PERFORMANCE</h3>
       <div id="strategy-stats" class="space-y-3">
@@ -110,7 +97,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Market Watch Grid -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">MARKET WATCH</h3>
@@ -121,7 +107,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Active Positions -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">ACTIVE POSITIONS</h3>
@@ -130,7 +115,6 @@ async def dashboard():
       <div id="active-positions-list"></div>
     </section>
 
-    <!-- Trade History -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">TRADE HISTORY</h3>
@@ -140,7 +124,6 @@ async def dashboard():
       </div>
     </section>
 
-    <!-- Neural Logs -->
     <section class="mb-6">
       <div class="flex justify-between items-end mb-3">
         <h3 class="font-orbitron text-sm text-slate-200 tracking-wider">NEURAL LOGS</h3>
@@ -151,7 +134,6 @@ async def dashboard():
     </section>
   </div>
 
-  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="glass w-full max-w-md rounded-2xl p-6 relative border border-neon-purple/50 shadow-[0_0_30px_rgba(176,38,255,0.2)]">
       <button onclick="closeBacktest()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
@@ -207,23 +189,14 @@ async function runBacktest() {
     const strat = document.getElementById('bt-strat').value;
     const btn = document.getElementById('bt-run-btn');
     const resDiv = document.getElementById('bt-results');
-    
-    btn.innerHTML = 'Running...';
-    btn.disabled = true;
-    resDiv.classList.add('hidden');
-    
+    btn.innerHTML = 'Running...'; btn.disabled = true; resDiv.classList.add('hidden');
     try {
         const res = await fetch(`/api/run_backtest?symbol=${symbol}&strategy=${strat}`, { method: 'POST' });
         const data = await res.json();
-        if(data.success) {
-            resDiv.textContent = data.report;
-            resDiv.classList.remove('hidden');
-        } else {
-            alert("Error: " + data.error);
-        }
+        if(data.success) { resDiv.textContent = data.report; resDiv.classList.remove('hidden'); } 
+        else { alert("Error: " + data.error); }
     } catch(e) { alert("Failed to run backtest"); }
-    btn.innerHTML = 'Run Simulation';
-    btn.disabled = false;
+    btn.innerHTML = 'Run Simulation'; btn.disabled = false;
 }
 
 async function loadLiveTickers() {
@@ -231,7 +204,6 @@ async function loadLiveTickers() {
         const res = await fetch('/api/live_tickers');
         const data = await res.json();
         if(data.length > 0) {
-            // Ticker
             let top10 = data.slice(0, 10);
             let tickerHtml = top10.map(d => {
                 const color = d.change >= 0 ? 'text-neon-green' : 'text-neon-red';
@@ -240,7 +212,6 @@ async function loadLiveTickers() {
             }).join('');
             document.getElementById('ticker-content').innerHTML = tickerHtml + tickerHtml;
 
-            // Market Watch
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
                 const isUp = d.change >= 0;
@@ -265,13 +236,13 @@ function initTVChart() {
     if(!chartElement) return;
     
     tvChart = LightweightCharts.createChart(chartElement, {
-        width: chartElement.clientWidth || 300, // Fallback width
+        width: chartElement.clientWidth || 300,
         height: 192,
         layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#64748b' },
         grid: { vertLines: { color: 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: 'rgba(255, 255, 255, 0.02)' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: { borderVisible: false },
-        timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+        timeScale: { borderVisible: false, timeVisible: true, secondsVisible: true },
     });
     
     areaSeries = tvChart.addAreaSeries({
@@ -290,10 +261,11 @@ async function updateTVChart(trades, currentEquity) {
     if(!areaSeries) return;
     
     let sortedTrades = trades.filter(t => t.status === 'CLOSED').reverse();
-    
     const radar = document.getElementById('radar-loader');
+    
     if(sortedTrades.length === 0) {
         radar.classList.remove('hidden');
+        areaSeries.setData([]); // clear chart
         return; 
     } else {
         radar.classList.add('hidden');
@@ -301,36 +273,26 @@ async function updateTVChart(trades, currentEquity) {
 
     let data = [];
     let currentEq = 200; // Initial balance
-    let time = new Date();
-    time.setDate(time.getDate() - sortedTrades.length - 1); 
+    let baseTime = Math.floor(Date.now() / 1000) - (sortedTrades.length * 3600) - 3600; // Start an hour before first trade
     
     // Add starting point
-    data.push({ time: time.toISOString().split('T')[0], value: currentEq });
+    data.push({ time: baseTime, value: currentEq });
 
-    sortedTrades.forEach(t => {
-        time.setDate(time.getDate() + 1);
+    sortedTrades.forEach((t, index) => {
         currentEq += (Number(t.net_pnl) || 0);
-        data.push({ time: time.toISOString().split('T')[0], value: currentEq });
+        // Add 1 hour per trade for sequential visual rendering
+        data.push({ time: baseTime + ((index + 1) * 3600), value: currentEq });
     });
 
-    // Add live point
-    let today = new Date();
-    data.push({ time: today.toISOString().split('T')[0], value: currentEquity });
-    
-    // Ensure unique times for TV chart (Lightweight Charts requires strictly ascending time)
-    const uniqueData = [];
-    const seen = new Set();
-    data.forEach(d => {
-        if(!seen.has(d.time)) {
-            seen.add(d.time);
-            uniqueData.push(d);
-        } else {
-            // If date exists, update the value of the latest point for that date
-            uniqueData[uniqueData.length - 1].value = d.value; 
-        }
-    });
+    // Add live point (current time)
+    let now = Math.floor(Date.now() / 1000);
+    // Ensure live point is strictly after the last trade
+    if (now <= data[data.length-1].time) {
+        now = data[data.length-1].time + 60; 
+    }
+    data.push({ time: now, value: currentEquity });
 
-    areaSeries.setData(uniqueData);
+    areaSeries.setData(data);
     tvChart.timeScale().fitContent();
 }
 
@@ -362,13 +324,9 @@ async function load(){
   document.getElementById('pnl-value').textContent = `${pnlVal >= 0 ? '+' : ''}${fmt(pnlVal)} USDT`;
   document.getElementById('pnl-percent').textContent = `(${pnlVal >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
   
-  if(pnlVal > 0) {
-      pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.3)]";
-  } else if(pnlVal < 0) {
-      pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.3)]";
-  } else {
-      pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700";
-  }
+  if(pnlVal > 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(0,255,102,0.1)] text-neon-green border border-[rgba(0,255,102,0.3)]"; } 
+  else if(pnlVal < 0) { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[rgba(255,0,60,0.1)] text-neon-red border border-[rgba(255,0,60,0.3)]"; } 
+  else { pnlDisplay.className = "inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-800/50 border border-slate-700"; }
 
   document.getElementById('winrate').textContent = perf.win_rate ? fmt(perf.win_rate) + '%' : '0.00%';
   document.getElementById('pf').textContent = (perf.profit_factor === null ? '∞' : (perf.profit_factor ? fmt(perf.profit_factor) : '0.00'));
@@ -396,9 +354,7 @@ async function load(){
                     <span class="uppercase text-slate-300">${name}</span>
                     <span class="${textColor}">${data.net >= 0 ? '+' : ''}${fmt(data.net)} USDT (${winRate.toFixed(0)}%)</span>
                 </div>
-                <div class="progress-bg">
-                    <div class="progress-fill ${colorClass}" style="width: ${winRate}%"></div>
-                </div>
+                <div class="progress-bg"><div class="progress-fill ${colorClass}" style="width: ${winRate}%"></div></div>
             </div>
           `;
       }
@@ -477,7 +433,6 @@ async function load(){
  }catch(e){ console.error('System Error:', e); }
 }
 
-// Initialize on Load with slight delay for chart width calculation
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => { initTVChart(); }, 100);
     loadLiveTickers();
@@ -546,7 +501,6 @@ async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: 
     try:
         engine = request.app.state.engine
         market = engine.market
-        # تأكد من أن دالة fetch_history موجودة في ملف market_data.py
         df = await market.fetch_history(symbol, "1h", "futures", 1000)
         if df.empty: return {"success": False, "error": "Failed to fetch history"}
         strategies = None if strategy == "all" else [strategy]
