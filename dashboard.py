@@ -22,7 +22,7 @@ async def dashboard():
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
-    tailwind.config = {
+    tailwind.config = { green: '#10b981', red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6', neutral: '#94a3b8' },
       theme: { 
         extend: { 
           colors: { 
