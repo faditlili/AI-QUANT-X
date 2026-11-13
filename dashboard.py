@@ -1,11 +1,12 @@
 """Ultimate FastAPI Dashboard - Final Perfected Edition with Forced PnL Colors."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-import asyncio
+import asyncio, re
 from backtest import run_backtest, format_report
 import config
 
 router=APIRouter()
+_bt_running=False
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -17,7 +18,7 @@ async def dashboard():
   <title>AI QUANT X · SaaS Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
@@ -223,6 +224,9 @@ let currentPositions = [];
 let winrateChart = null;
 let pfChart = null;
 let weeklyChart = null;
+let priceLines = [];
+let overlaySig = '';
+const refreshIcons = () => { try { if (window.lucide) window.lucide.createIcons(); } catch (e) {} };
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 // الألوان الصارمة
@@ -230,7 +234,7 @@ const COLOR_GREEN = '#10b981';
 const COLOR_RED = '#ef4444';
 const COLOR_NEUTRAL = '#64748b';
 
-lucide.createIcons();
+refreshIcons();
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
@@ -241,7 +245,7 @@ function showToast(message, type = 'info') {
     toast.className = `toast ${bgColor} text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto text-xs font-medium`;
     toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${message}</span>`;
     container.appendChild(toast);
-    lucide.createIcons();
+    refreshIcons();
     
     setTimeout(() => {
         toast.style.opacity = '0';
@@ -269,12 +273,17 @@ async function togglePause() {
     const btn = document.getElementById('pause-btn');
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i>...';
-    lucide.createIcons();
+    refreshIcons();
     
-    const res = await fetch('/api/toggle_pause', { method: 'POST' });
-    const data = await res.json();
-    updatePauseButton(data.paused);
-    showToast(data.paused ? 'Bot Paused' : 'Bot Resumed', data.paused ? 'error' : 'success');
+    try {
+        const res = await fetch('/api/toggle_pause', { method: 'POST' });
+        const data = await res.json();
+        updatePauseButton(data.paused);
+        showToast(data.paused ? 'Bot Paused' : 'Bot Resumed', data.paused ? 'error' : 'success');
+    } catch (e) {
+        btn.innerHTML = originalHtml; refreshIcons();
+        showToast('Request failed', 'error');
+    }
 }
 
 function updatePauseButton(isPaused) {
@@ -286,13 +295,17 @@ function updatePauseButton(isPaused) {
         btn.className = "px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1";
         btn.innerHTML = '<i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE';
     }
-    lucide.createIcons();
+    refreshIcons();
 }
 
 async function closePosition(id, symbol) {
     if(!confirm(`Close ${symbol}?`)) return;
-    await fetch(`/api/close_position/${id}`, { method: 'POST' });
-    showToast(`Closed ${symbol}`, 'success');
+    try {
+        const res = await fetch(`/api/close_position/${id}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) showToast(`Closed ${symbol}`, 'success');
+        else showToast('Error: ' + (data.error || 'close failed'), 'error');
+    } catch (e) { showToast('Failed to close position', 'error'); }
     load();
 }
 
@@ -305,7 +318,7 @@ async function runBacktest() {
     const btn = document.getElementById('bt-run-btn');
     const resDiv = document.getElementById('bt-results');
     btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Running...'; btn.disabled = true; resDiv.classList.add('hidden');
-    lucide.createIcons();
+    refreshIcons();
     
     try {
         const res = await fetch(`/api/run_backtest?symbol=${symbol}&strategy=${strat}`, { method: 'POST' });
@@ -318,7 +331,7 @@ async function runBacktest() {
         else { showToast("Error: " + data.error, 'error'); }
     } catch(e) { showToast("Failed to run backtest", 'error'); }
     btn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation'; btn.disabled = false;
-    lucide.createIcons();
+    refreshIcons();
 }
 
 function initTVChart() {
@@ -415,6 +428,26 @@ async function loadLiveTickers() {
     } catch(e) {}
 }
 
+function drawPositionOverlays() {
+    if (!candleSeries) return;
+    priceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch (e) {} });
+    priceLines = [];
+    const markers = [];
+    currentPositions.filter(p => p.symbol === currentSymbol).forEach(pos => {
+        const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
+        markers.push({
+            time: entryTime, position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
+            color: pos.side === 'LONG' ? COLOR_GREEN : COLOR_RED,
+            shape: pos.side === 'LONG' ? 'arrowUp' : 'arrowDown', text: pos.side
+        });
+        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#3b82f6', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' }));
+        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.stop_price), color: COLOR_RED, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' }));
+        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.target_price), color: COLOR_GREEN, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' }));
+    });
+    markers.sort((a, b) => a.time - b.time);
+    candleSeries.setMarkers(markers);
+}
+
 async function loadChartData(symbol) {
     try {
         const res = await fetch(`/api/market_klines?symbol=${symbol}&interval=15m`);
@@ -423,22 +456,7 @@ async function loadChartData(symbol) {
             candleSeries.setData(data);
             tvChart.timeScale().fitContent();
             
-            candleSeries.setMarkers([]);
-            const symbolPositions = currentPositions.filter(p => p.symbol === symbol);
-            let markers = [];
-            
-            symbolPositions.forEach(pos => {
-                const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
-                markers.push({
-                    time: entryTime, position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
-                    color: pos.side === 'LONG' ? COLOR_GREEN : COLOR_RED,
-                    shape: pos.side === 'LONG' ? 'arrowUp' : 'arrowDown', text: pos.side
-                });
-                candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#3b82f6', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' });
-                candleSeries.createPriceLine({ price: Number(pos.stop_price), color: COLOR_RED, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' });
-                candleSeries.createPriceLine({ price: Number(pos.target_price), color: COLOR_GREEN, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' });
-            });
-            candleSeries.setMarkers(markers);
+            drawPositionOverlays();
         }
     } catch(e) {}
 }
@@ -516,7 +534,9 @@ async function load(){
       fetch('/api/risk').then(y=>y.json())
   ]);
   
-  const p = results[0].status === 'fulfilled' ? results[0].value : {equity: 0, unrealized_pnl: 0, realized_pnl: 0};
+  if (results[0].status !== 'fulfilled') { return; }
+  const p = results[0].value;
+  const startBalance = p.initial_balance || 200;
   const ps = results[1].status === 'fulfilled' ? results[1].value : [];
   const perf = results[2].status === 'fulfilled' ? results[2].value : {win_rate: 0, profit_factor: 0};
   const status = results[3].status === 'fulfilled' ? results[3].value : {paused: false};
@@ -525,12 +545,14 @@ async function load(){
   const risk = results[6].status === 'fulfilled' ? results[6].value : {breadth: 50};
 
   currentPositions = ps;
+  const sig = JSON.stringify(ps.map(x => [x.id, x.stop_price]));
+  if (sig !== overlaySig) { overlaySig = sig; drawPositionOverlays(); }
   updatePauseButton(status.paused);
   
   document.getElementById('total-equity').textContent = fmt(p.equity);
   
-  const pnlVal = p.unrealized_pnl + p.realized_pnl;
-  const pnlPercent = (pnlVal / 200) * 100;
+  const pnlVal = p.equity - startBalance;
+  const pnlPercent = (pnlVal / startBalance) * 100;
   const pnlDisplay = document.getElementById('pnl-display');
   const pnlIcon = document.getElementById('pnl-icon');
   const pnlValueEl = document.getElementById('pnl-value');
@@ -571,7 +593,7 @@ async function load(){
       pnlIcon.className = "w-3.5 h-3.5";
       pnlIcon.style.color = COLOR_NEUTRAL;
   }
-  lucide.createIcons();
+  refreshIcons();
 
   updateWeeklyStats(trades);
 
@@ -587,8 +609,8 @@ async function load(){
   document.getElementById('winrate').textContent = wr.toFixed(0) + '%';
   if(winrateChart) winrateChart.data.datasets[0].data = [wr, 100 - wr], winrateChart.update();
 
-  let pfVal = perf.profit_factor;
-  let pfText = (pfVal === null ? '∞' : pfVal.toFixed(2));
+  let pfVal = (perf.profit_factor === undefined ? 0 : perf.profit_factor);
+  let pfText = (pfVal === null ? '∞' : Number(pfVal).toFixed(2));
   document.getElementById('pf').textContent = pfText;
   let pfPct = 0;
   if (pfVal === null) pfPct = 100;
@@ -673,8 +695,8 @@ async function load(){
   } else {
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        let colorStyle = d.action.includes('BUY') ? `color: ${COLOR_GREEN};` : d.action.includes('SHORT') ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
-        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${d.reason.substring(0, 45)}...</span></div>`;
+        let colorStyle = d.action.includes('LONG') ? `color: ${COLOR_GREEN};` : d.action.includes('SHORT') ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
+        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
     }).join('');
   }
 
@@ -682,11 +704,12 @@ async function load(){
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => { initTVChart(); initCharts(); }, 200);
+    setTimeout(() => { try { if (window.LightweightCharts) initTVChart(); } catch (e) { console.error(e); } try { if (window.Chart) initCharts(); } catch (e) { console.error(e); } }, 200);
     loadLiveTickers();
     load(); 
     setInterval(load, 3000);
     setInterval(loadLiveTickers, 10000);
+    setInterval(() => { if (candleSeries) loadChartData(currentSymbol); }, 60000);
 });
 </script>
 </body>
@@ -696,7 +719,9 @@ document.addEventListener('DOMContentLoaded', () => {
 @router.get("/api/status")
 async def status(request:Request): return request.app.state.engine.get_status()
 @router.get("/api/portfolio")
-async def portfolio(request:Request): return request.app.state.db.get_portfolio()
+async def portfolio(request:Request):
+    db=request.app.state.db
+    return {**db.get_portfolio(),"initial_balance":float(db.get_state("initial_balance",config.INITIAL_BALANCE))}
 @router.get("/api/risk")
 async def risk(request:Request): 
     r = request.app.state.engine.risk.get_risk_status()
@@ -788,6 +813,15 @@ async def close_position(request:Request, pos_id: int):
 
 @router.post("/api/run_backtest")
 async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: str = "all"):
+    global _bt_running
+    symbol = symbol.upper()
+    if not re.fullmatch(r"[A-Z0-9]{5,15}", symbol):
+        return {"success": False, "error": "Invalid symbol"}
+    if strategy != "all" and strategy not in config.STRATEGIES:
+        return {"success": False, "error": "Invalid strategy"}
+    if _bt_running:
+        return {"success": False, "error": "Another backtest is running, try again shortly"}
+    _bt_running = True
     try:
         engine = request.app.state.engine
         market = engine.market
@@ -799,3 +833,5 @@ async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: 
         return {"success": True, "report": report_text}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        _bt_running = False
