@@ -72,11 +72,14 @@ class RiskManager:
             return None, "Target too small vs. costs"
         stop=price-stop_dist if side=="LONG" else price+stop_dist
         risk_budget=min(p["equity"]*config.RISK_PER_TRADE_PCT/100,status["risk_remaining"])
-        allocation=p["equity"]*config.MAX_ALLOCATION_PCT/100
+        cash_cap=p["cash_balance"]/(1+config.fee_rate(source)+config.SLIPPAGE_BPS/10000+0.002)
+        allocation=min(p["equity"]*config.MAX_ALLOCATION_PCT/100,cash_cap)
         qty=min(risk_budget/stop_dist,allocation/price)
         notional=qty*price
         fee=notional*config.fee_rate(source)
-        if qty<=0 or notional+fee>p["cash_balance"]:
+        if qty<=0 or notional<getattr(config,"MIN_NOTIONAL_USDT",10.0):
+            return None, "Insufficient virtual cash"
+        if notional+fee>p["cash_balance"]:
             return None, "Insufficient virtual cash"
         return {"quantity":qty,"stop_price":stop,
                 "target_price":price+stop_dist*rr if side=="LONG" else price-stop_dist*rr,
