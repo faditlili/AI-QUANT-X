@@ -47,7 +47,6 @@ class PaperTrader:
             if price<=0: continue
             self.db.mark_position(pos["id"],price)
             
-            # --- Scale-Out Logic ---
             if config.SCALE_OUT_ENABLED and pos["quantity"] == pos["initial_quantity"]:
                 sign = 1 if pos["side"] == "LONG" else -1
                 initial_risk = abs(pos["entry_price"] - (pos["initial_stop"] or pos["stop_price"]))
