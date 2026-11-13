@@ -64,7 +64,10 @@ class RiskManager:
             return None, "Duplicate open position"
         blocked,why=self.protection_status()
         if blocked:
-            return None, why
+          return None, why
+        same_side=sum(1 for x in self.db.get_open_positions() if x["side"]==side)
+        if same_side>=getattr(config,"MAX_SAME_SIDE",99):
+            return None, "Directional limit reached"
         stop_mult=stop_mult or config.ATR_STOP_MULTIPLIER
         rr=rr or config.REWARD_RISK_RATIO
         stop_dist=atr*stop_mult
