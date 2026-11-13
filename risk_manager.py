@@ -1,4 +1,4 @@
-"""Risk controls for a virtual portfolio. Aggregate open risk is capped at 10%."""
+"""Risk controls for a virtual portfolio. Institutional Heat Management."""
 import time
 from datetime import datetime
 import config
@@ -22,7 +22,6 @@ class RiskManager:
                 "daily_loss_limit":daily_limit,"daily_limit_hit":daily_change <= -daily_limit}
 
     def protection_status(self):
-        """Loss-streak pause and max-drawdown stop. Returns (blocked, reason)."""
         closed=sorted([t for t in self.db.get_recent_trades(config.MAX_CONSECUTIVE_LOSSES*6) if t["status"]=="CLOSED"],
                       key=lambda t:t["closed_at"] or "",reverse=True)
         last=closed[:config.MAX_CONSECUTIVE_LOSSES]
@@ -62,12 +61,11 @@ class RiskManager:
             return None, "Maximum open positions reached"
         if any(x["symbol"]==symbol and x["source"]==source for x in self.db.get_open_positions()):
             return None, "Duplicate open position"
+        
         blocked,why=self.protection_status()
         if blocked:
-          return None, why
-        same_side=sum(1 for x in self.db.get_open_positions() if x["side"]==side)
-        if same_side>=getattr(config,"MAX_SAME_SIDE",99):
-            return None, "Directional limit reached"
+            return None, why
+
         stop_mult=stop_mult or config.ATR_STOP_MULTIPLIER
         rr=rr or config.REWARD_RISK_RATIO
         stop_dist=atr*stop_mult
@@ -75,18 +73,34 @@ class RiskManager:
             return None, "Target too small vs. costs"
         stop=price-stop_dist if side=="LONG" else price+stop_dist
         risk_budget=min(p["equity"]*config.RISK_PER_TRADE_PCT/100,status["risk_remaining"])
-        cash_cap=p["cash_balance"]/(1+config.fee_rate(source)+config.SLIPPAGE_BPS/10000+0.002)
-        allocation=min(p["equity"]*config.MAX_ALLOCATION_PCT/100,cash_cap)
+        
+        allocation=p["equity"]*config.MAX_ALLOCATION_PCT/100
         qty=min(risk_budget/stop_dist,allocation/price)
         notional=qty*price
         fee=notional*config.fee_rate(source)
-        if qty<=0 or notional<getattr(config,"MIN_NOTIONAL_USDT",10.0):
+        
+        if qty<=0 or notional+fee>p["cash_balance"]:
             return None, "Insufficient virtual cash"
-        if notional+fee>p["cash_balance"]:
-            return None, "Insufficient virtual cash"
+            
+        actual_risk = qty * stop_dist
+        
+        open_positions = self.db.get_open_positions()
+        
+        # هذه القيم ستقرأ 10% و 20% من ملف config الجديد
+        directional_risk = sum(float(pos["risk_amount"]) for pos in open_positions if pos["side"] == side)
+        max_directional_risk = p["equity"] * config.MAX_DIRECTIONAL_HEAT_PCT / 100
+        
+        total_risk = sum(float(pos["risk_amount"]) for pos in open_positions)
+        max_total_risk = p["equity"] * config.MAX_TOTAL_HEAT_PCT / 100
+        
+        if directional_risk + actual_risk > max_directional_risk:
+            return None, f"Heat Blocked: Max {side} risk reached ({config.MAX_DIRECTIONAL_HEAT_PCT}%)"
+        if total_risk + actual_risk > max_total_risk:
+            return None, f"Heat Blocked: Max Total risk reached ({config.MAX_TOTAL_HEAT_PCT}%)"
+
         return {"quantity":qty,"stop_price":stop,
                 "target_price":price+stop_dist*rr if side=="LONG" else price-stop_dist*rr,
-                "margin_used":notional,"risk_amount":qty*stop_dist,"opening_fee":fee}, ""
+                "margin_used":notional,"risk_amount":actual_risk,"opening_fee":fee}, ""
 
     def assess(self):
         s=self.get_risk_status()
