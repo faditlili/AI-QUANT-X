@@ -91,15 +91,17 @@ class TelegramNotifier:
 
     async def cmd_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self._guard(update): return
-        trades = self.db.get_recent_trades(5)
-        closed_trades = [t for t in trades if t["status"] == "CLOSED"]
+        trades = self.db.get_recent_trades(200)
+        closed_trades = sorted([t for t in trades if t["status"] == "CLOSED"],
+                               key=lambda t: t["closed_at"] or "", reverse=True)[:10]
         if not closed_trades:
             await update.effective_message.reply_text("لا توجد صفقات مغلقة مؤخراً.")
             return
-        msg = "📜 آخر 5 صفقات مغلقة:\n\n"
+        msg = f"📜 آخر {len(closed_trades)} صفقات مغلقة:\n\n"
         for t in closed_trades:
             emoji = "🟢" if float(t['net_pnl']) > 0 else "🔴"
-            msg += f"{emoji} {t['symbol']} | {t['side']}\n"
+            hhmm = (t["closed_at"] or "")[11:16]
+            msg += f"{emoji} {t['symbol']} | {t['side']} | {hhmm} UTC\n"
             msg += f"PnL: {float(t['net_pnl']):+.2f} USDT ({t['exit_reason']})\n\n"
         await update.effective_message.reply_text(msg)
 
