@@ -83,8 +83,8 @@ class Engine:
         open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
         
         if open_symbols:
-            # عتبة 0.85 بناءً على توصية كلود لمنع الصفقات المترابطة
-            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.85)
+            # العتبة تُضبط من config.CORRELATION_MAX
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=getattr(config,"CORRELATION_MAX",0.85))
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
