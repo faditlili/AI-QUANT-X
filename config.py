@@ -49,6 +49,7 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
+CORRELATION_MAX = 0.92   # أقصى ارتباط مسموح بين صفقتين مفتوحتين (0.85 أشد، 0.98 شبه معطّل)
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
@@ -82,7 +83,7 @@ DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
 RISK_PER_TRADE_PCT = 1.0     # مخاطرة 1% (2 دولار)
 MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 100.0   # <--- تم التعديل إلى 100% لكي نسمح للصفقات بالكبر
+MAX_ALLOCATION_PCT = 25.0    # سقف الصفقة 25% من الرصيد: تتسع 4 صفقات معاً (تنويع أكبر وصفقات أكثر)
 DAILY_LOSS_LIMIT_PCT = 3.0
 
 # Fees
@@ -123,7 +124,7 @@ LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
-SCALE_OUT_ENABLED = False
+SCALE_OUT_ENABLED = True
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
