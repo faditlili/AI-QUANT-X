@@ -1,4 +1,4 @@
-import hmac, logging
+import hmac, logging, sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -9,8 +9,14 @@ from engine import Engine
 from telegram_bot import TelegramNotifier
 from dashboard import router
 
-logging.basicConfig(level=getattr(logging,config.LOG_LEVEL.upper(),logging.INFO),
+# INFO إلى stdout (عادي)، والتحذيرات والأخطاء إلى stderr (تظهر حمراء في Railway)
+_out=logging.StreamHandler(sys.stdout); _out.addFilter(lambda r: r.levelno<logging.WARNING)
+_err=logging.StreamHandler(sys.stderr); _err.setLevel(logging.WARNING)
+logging.basicConfig(level=getattr(logging,config.LOG_LEVEL.upper(),logging.INFO),handlers=[_out,_err],
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# روابط طلبات تيليجرام تحتوي توكن البوت: لا نسجّلها أبداً
+for _noisy in ("httpx","httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 config.validate_config()
 
 @asynccontextmanager
