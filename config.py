@@ -50,6 +50,7 @@ MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
 CORRELATION_MAX = 0.92   # أقصى ارتباط مسموح بين صفقتين مفتوحتين (0.85 أشد، 0.98 شبه معطّل)
+MAX_SAME_SIDE = 3        # أقصى عدد صفقات مفتوحة في الاتجاه نفسه. ضع 5 لتعطيله
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
