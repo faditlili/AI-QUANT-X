@@ -228,6 +228,8 @@ let priceLines = [];
 let overlaySig = '';
 const refreshIcons = () => { try { if (window.lucide) window.lucide.createIcons(); } catch (e) {} };
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+// سعر بدقة مناسبة لحجمه (يعرض أيضاً العملات الصغيرة مثل SHIB بدل 0.0000)
+const fmtPrice = (n) => { n = Number(n); if (!isFinite(n)) return '-'; const a = Math.abs(n); if (a >= 1000) return fmt(n); if (a >= 1) return n.toFixed(4); return n.toPrecision(4); };
 
 // الألوان الصارمة
 const COLOR_GREEN = '#10b981';
@@ -419,7 +421,7 @@ async function loadLiveTickers() {
                 <div class="flex justify-between items-center p-1.5 rounded-md ${bgColor} mb-1">
                     <span class="font-bold text-slate-800 text-[11px]">${d.symbol}</span>
                     <div class="text-right">
-                        <div class="text-slate-900 text-[11px] font-mono font-semibold">$${fmt(d.price)}</div>
+                        <div class="text-slate-900 text-[11px] font-mono font-semibold">$${fmtPrice(d.price)}</div>
                         <div class="text-[9px] font-bold" style="color: ${textColor};">${sign}${d.change}%</div>
                     </div>
                 </div>`;
@@ -647,15 +649,15 @@ async function load(){
           </div>
           <div class="text-right">
             <p class="text-[9px] text-slate-400 uppercase">Entry</p>
-            <p class="font-mono text-xs font-semibold text-slate-800">${entryPrice.toFixed(4)}</p>
+            <p class="font-mono text-xs font-semibold text-slate-800">${fmtPrice(entryPrice)}</p>
             <p class="text-[9px] text-slate-400 uppercase mt-0.5">Current</p>
-            <p class="font-mono text-[11px] font-semibold text-slate-600">${currentPrice.toFixed(4)}</p>
+            <p class="font-mono text-[11px] font-semibold text-slate-600">${fmtPrice(currentPrice)}</p>
           </div>
         </div>
         <div class="flex justify-between items-center pt-2 border-t border-slate-100">
            <div class="flex gap-3">
-               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_GREEN};">${Number(pos.target_price).toFixed(4)}</p></div>
-               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_RED};">${Number(pos.stop_price).toFixed(4)}</p></div>
+               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_GREEN};">${fmtPrice(pos.target_price)}</p></div>
+               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_RED};">${fmtPrice(pos.stop_price)}</p></div>
            </div>
            <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold border px-2.5 py-1 rounded-md hover:bg-red-50 transition-colors" style="color: ${COLOR_RED}; border-color: ${COLOR_RED}40;">CLOSE</button>
         </div>
@@ -681,7 +683,7 @@ async function load(){
           html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
               <td class="p-2 font-bold text-slate-800 text-[11px]">${t.symbol}</td>
               <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100' : 'bg-red-100'}" style="${pnlColorStyle}">${t.side}</span></td>
-              <td class="p-2 text-right font-mono text-[11px]">${Number(t.entry_price).toFixed(2)}</td>
+              <td class="p-2 text-right font-mono text-[11px]">${fmtPrice(t.entry_price)}</td>
               <td class="p-2 text-right font-mono font-bold text-[11px]" style="${pnlColorStyle}">${pnlSign}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
