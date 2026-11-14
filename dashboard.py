@@ -22,7 +22,7 @@ async def dashboard():
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
-    tailwind.config = {d.action.includes('BUY') ||)(d.action.includes('LONG')},
+    tailwind.config = {
       theme: { 
         extend: { 
           colors: { 
@@ -697,7 +697,8 @@ async function load(){
   } else {
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        let colorStyle = d.action.includes('BUY') ? `color: ${COLOR_GREEN};` : d.action.includes('LONG') ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
+        // إصلاح الألوان هنا: BUY و LONG خضراء، SHORT حمراء
+        let colorStyle = (d.action.includes('BUY') || d.action.includes('LONG')) ? `color: ${COLOR_GREEN};` : (d.action.includes('SHORT') || d.action.includes('SELL')) ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
         return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
     }).join('');
   }
