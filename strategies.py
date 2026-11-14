@@ -23,7 +23,6 @@ class TrendStrategy:
         dirs = ctx.get("dirs") or []
         want = "BULLISH" if side == "LONG" else "BEARISH"
         
-        # --- تعديل القناص: نكتفي بتأكيد إطار الساعة وإطار الـ 4 ساعات ---
         opposite = "BEARISH" if side == "LONG" else "BULLISH"
         htf_ok = (dirs[-1] == want) if getattr(config, "STRICT_HTF_CONFIRM", False) else (dirs[-1] != opposite)
         confirmed = len(dirs) >= 2 and dirs[1] == want and htf_ok
@@ -39,7 +38,6 @@ class MeanReversionStrategy:
         p = ctx["primary"]
         z, rsi = p["zscore"], p["rsi"]
         
-        # --- تعديل القناص: تخفيف شروط الارتداد قليلاً لالتقاط صفقات في السوق العرضي ---
         if z <= -1.5 and rsi <= 42: side = "LONG"
         elif z >= 1.5 and rsi >= 58: side = "SHORT"
         else: return None
@@ -76,7 +74,31 @@ class BreakoutStrategy:
         if not confirmed: reasons.append("HTF opposes")
         return {"strategy": self.name, "side": side, "score": score, "reasons": reasons, "confirmed": confirmed, "stop_mult": 1.5, "rr": 2.5}
 
-REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy())}
+# --- إعادة استراتيجية صائد الارتداد (Dip Buyer) ---
+class DipBuyerStrategy:
+    name = "dip_buyer"
+    regimes = {"RANGE", "TREND", "TRANSITION", "HIGH_VOL"}
+    def evaluate(self, ctx):
+        p = ctx["primary"]
+        htf = _htf_dir(ctx)
+        if p["rsi"] <= 32 and p["zscore"] <= -1.5:
+            if htf == "BEARISH": return None
+            score = 50
+            reasons = ["Sharp drop detected (RSI < 32)"]
+            if p["rsi"] < 20: score += 20; reasons.append("Extreme oversold (RSI < 20)")
+            if p["volume_ratio"] > 1.5: score += 15; reasons.append("High panic volume")
+            if htf == "NEUTRAL": score += 10; reasons.append("HTF stabilizing")
+            return {"strategy": self.name, "side": "LONG", "score": score, "reasons": reasons, "confirmed": True, "stop_mult": 1.5, "rr": 1.5}
+        elif p["rsi"] >= 72 and p["zscore"] >= 1.5:
+            if htf == "BULLISH": return None
+            score = 50
+            reasons = ["Sharp pump detected (RSI > 72)"]
+            if p["rsi"] > 80: score += 20; reasons.append("Extreme overbought (RSI > 80)")
+            return {"strategy": self.name, "side": "SHORT", "score": score, "reasons": reasons, "confirmed": True, "stop_mult": 1.5, "rr": 1.5}
+        return None
+
+# تمت إعادة DipBuyerStrategy إلى السجل
+REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy(), DipBuyerStrategy())}
 
 def _decision(regime, cand, res):
     base = {"regime": regime, "strategy": cand["strategy"], "score": cand["score"], "stop_mult": cand["stop_mult"], "rr": cand["rr"]}
@@ -93,19 +115,24 @@ def select_signal(ctx, enabled=None):
             return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD", "reason": "Outside high-liquidity sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
 
     regime = detect_regime(ctx["primary"])
-    if regime == "HIGH_VOL":
+    
+    # إصلاح: لا نوقف التداول في HIGH_VOL إذا كانت استراتيجية dip_buyer مفعلة
+    if regime == "HIGH_VOL" and "dip_buyer" not in (enabled or config.STRATEGIES):
         return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD", "reason": f"[{regime}] Volatility too high", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
     
     results = []
     for name in (enabled or config.STRATEGIES):
         strat = REGISTRY.get(name)
-        if not strat or regime not in strat.regimes: continue
+        if not strat: continue
+        
+        # استثناء dip_buyer من شرط regime العادي
+        if regime not in strat.regimes and name != "dip_buyer": continue
+        
         cand = strat.evaluate(ctx)
         if not cand: continue
             
-        # --- الفلاتر المتقدمة (متوازنة للشراء والبيع) ---
         if cand["side"] == "LONG":
-            if _vwap(ctx) is not None and ctx["primary"]["price"] < _vwap(ctx):
+            if name != "dip_buyer" and _vwap(ctx) is not None and ctx["primary"]["price"] < _vwap(ctx):
                 cand["reasons"].append("Price below VWAP"); cand["confirmed"] = False
             if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
                 funding = ctx.get("funding_rate", 0.0)
@@ -114,13 +141,14 @@ def select_signal(ctx, enabled=None):
             taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
             if taker_ratio < 0.45:
                 cand["reasons"].append(f"Weak Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
-            if ctx.get("fear_greed", 50) > 80:
-                cand["reasons"].append("Extreme Greed"); cand["confirmed"] = False
-            if ctx.get("breadth", 50.0) < 30.0:
-                cand["reasons"].append("Weak Breadth"); cand["confirmed"] = False
+                
+            if name != "dip_buyer":
+                if ctx.get("fear_greed", 50) > 80:
+                    cand["reasons"].append("Extreme Greed"); cand["confirmed"] = False
+                if ctx.get("breadth", 50.0) < 30.0:
+                    cand["reasons"].append("Weak Breadth"); cand["confirmed"] = False
                 
         elif cand["side"] == "SHORT":
-            # فلاتر البيع العكسية
             if _vwap(ctx) is not None and ctx["primary"]["price"] > _vwap(ctx):
                 cand["reasons"].append("Price above VWAP"); cand["confirmed"] = False
             if getattr(config, 'USE_FUNDING_RATE_FILTER', False):
@@ -128,14 +156,15 @@ def select_signal(ctx, enabled=None):
                 if funding < config.MIN_SHORT_FUNDING_RATE:
                     cand["reasons"].append(f"Funding low ({funding:.4f})"); cand["confirmed"] = False
             taker_ratio = ctx["primary"].get("taker_buy_ratio", 0.5)
-            if taker_ratio > 0.55: # مشترون أقوياء جداً، لا تبع
+            if taker_ratio > 0.55: 
                 cand["reasons"].append(f"Strong Takers ({taker_ratio:.2f})"); cand["confirmed"] = False
-            if ctx.get("fear_greed", 50) < 20:
-                cand["reasons"].append("Extreme Fear"); cand["confirmed"] = False
-            if ctx.get("breadth", 50.0) > 70.0:
-                cand["reasons"].append("Strong Breadth"); cand["confirmed"] = False
+                
+            if name != "dip_buyer":
+                if ctx.get("fear_greed", 50) < 20:
+                    cand["reasons"].append("Extreme Fear"); cand["confirmed"] = False
+                if ctx.get("breadth", 50.0) > 70.0:
+                    cand["reasons"].append("Strong Breadth"); cand["confirmed"] = False
                     
-        # بوصلة BTC/ETH: لا نعاكس اتجاه الثقيلتين معاً (لا تنطبق على BTC وETH نفسيهما)
         compass = ctx.get("compass")
         if compass and getattr(config, "USE_BTC_COMPASS", False) and ctx.get("symbol") not in config.DIRECTION_SYMBOLS:
             if cand["side"] == "LONG" and compass == "BEARISH":
