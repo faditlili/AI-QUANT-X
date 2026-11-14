@@ -74,7 +74,6 @@ class BreakoutStrategy:
         if not confirmed: reasons.append("HTF opposes")
         return {"strategy": self.name, "side": side, "score": score, "reasons": reasons, "confirmed": confirmed, "stop_mult": 1.5, "rr": 2.5}
 
-# --- إعادة استراتيجية صائد الارتداد (Dip Buyer) ---
 class DipBuyerStrategy:
     name = "dip_buyer"
     regimes = {"RANGE", "TREND", "TRANSITION", "HIGH_VOL"}
@@ -97,7 +96,6 @@ class DipBuyerStrategy:
             return {"strategy": self.name, "side": "SHORT", "score": score, "reasons": reasons, "confirmed": True, "stop_mult": 1.5, "rr": 1.5}
         return None
 
-# تمت إعادة DipBuyerStrategy إلى السجل
 REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy(), DipBuyerStrategy())}
 
 def _decision(regime, cand, res):
@@ -108,7 +106,6 @@ def _decision(regime, cand, res):
     return base
 
 def select_signal(ctx, enabled=None):
-    # 1. Session Filter
     if getattr(config, 'USE_SESSION_FILTER', False):
         current_hour = ctx.get("hour_utc", datetime.datetime.now(datetime.timezone.utc).hour)
         if not (config.LONDON_OPEN <= current_hour < config.SESSION_END):
@@ -116,7 +113,6 @@ def select_signal(ctx, enabled=None):
 
     regime = detect_regime(ctx["primary"])
     
-    # إصلاح: لا نوقف التداول في HIGH_VOL إذا كانت استراتيجية dip_buyer مفعلة
     if regime == "HIGH_VOL" and "dip_buyer" not in (enabled or config.STRATEGIES):
         return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD", "reason": f"[{regime}] Volatility too high", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
     
@@ -125,7 +121,6 @@ def select_signal(ctx, enabled=None):
         strat = REGISTRY.get(name)
         if not strat: continue
         
-        # استثناء dip_buyer من شرط regime العادي
         if regime not in strat.regimes and name != "dip_buyer": continue
         
         cand = strat.evaluate(ctx)
