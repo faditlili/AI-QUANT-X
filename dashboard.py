@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition with Auto-Tune."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition with Fixed Header & Auto-Tune."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
@@ -42,6 +42,7 @@ async def dashboard():
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
     .tab-btn { padding: 0.75rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
     .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -54,17 +55,19 @@ async def dashboard():
 
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
-      <div class="flex justify-between items-center h-14">
-        <div class="flex items-center gap-2">
-            <div style="background-color: #2563eb; color: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
+      <div class="flex justify-between items-center h-14 gap-2">
+        <!-- Logo Section -->
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+            <div style="background-color: #2563eb; color: white; width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
             </div>
-            <span class="font-bold text-base tracking-tight">AI QUANT</span>
+            <span class="font-bold text-sm tracking-tight whitespace-nowrap">AI QUANT</span>
         </div>
-        <div class="flex gap-2">
-            <button onclick="runAutoTune()" class="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-semibold hover:bg-purple-200 flex items-center gap-1"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO-TUNE</button>
-            <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 flex items-center gap-1"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
-            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
+        <!-- Buttons Section -->
+        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
+            <button onclick="runAutoTune()" class="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold hover:bg-purple-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO</button>
+            <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold hover:bg-slate-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
+            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-[10px] font-bold hover:bg-green-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
       <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200 text-[11px] px-1">
@@ -291,10 +294,10 @@ async function togglePause() {
 function updatePauseButton(isPaused) {
     const btn = document.getElementById('pause-btn');
     if (isPaused) {
-        btn.className = "px-2.5 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200 flex items-center gap-1";
+        btn.className = "px-2.5 py-1.5 bg-red-100 text-red-700 rounded-lg text-[10px] font-bold hover:bg-red-200 flex items-center gap-1 whitespace-nowrap";
         btn.innerHTML = '<i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> PAUSED';
     } else {
-        btn.className = "px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1";
+        btn.className = "px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-[10px] font-bold hover:bg-green-200 flex items-center gap-1 whitespace-nowrap";
         btn.innerHTML = '<i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE';
     }
     refreshIcons();
@@ -377,9 +380,11 @@ function initTVChart() {
 
     setTimeout(() => {
         const w = chartElement.clientWidth;
-        tvChart.applyOptions({ width: w, height: 192 });
-        tvChart.timeScale().fitContent();
-    }, 1000);
+        if (w > 0) {
+            tvChart.applyOptions({ width: w, height: 192 });
+            tvChart.timeScale().fitContent();
+        }
+    }, 500);
 }
 
 function initCharts() {
