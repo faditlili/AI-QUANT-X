@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition with Fixed Header & Auto-Tune."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition with Custom Modals."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
@@ -56,14 +56,12 @@ async def dashboard():
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14 gap-2">
-        <!-- Logo Section -->
         <div class="flex items-center gap-1.5 flex-shrink-0">
             <div style="background-color: #2563eb; color: white; width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
             </div>
             <span class="font-bold text-sm tracking-tight whitespace-nowrap">AI QUANT</span>
         </div>
-        <!-- Buttons Section -->
         <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
             <button onclick="runAutoTune()" class="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold hover:bg-purple-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO</button>
             <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold hover:bg-slate-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
@@ -200,6 +198,7 @@ async def dashboard():
 
   </div>
 
+  <!-- Backtest Modal -->
   <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
     <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
       <div class="flex justify-between items-center mb-4">
@@ -221,6 +220,18 @@ async def dashboard():
     </div>
   </div>
 
+  <!-- Custom Confirm Modal -->
+  <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl text-center">
+      <h3 id="confirm-title" class="text-base font-bold text-slate-800 mb-2">تأكيد</h3>
+      <p id="confirm-message" class="text-sm text-slate-600 mb-6">هل أنت متأكد؟</p>
+      <div class="flex gap-3">
+        <button onclick="closeConfirm(false)" class="flex-1 bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg hover:bg-slate-200 transition-all text-sm">إلغاء</button>
+        <button onclick="closeConfirm(true)" class="flex-1 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-all text-sm">حسناً</button>
+      </div>
+    </div>
+  </div>
+
 <script>
 let tvChart = null;
 let candleSeries = null;
@@ -231,6 +242,8 @@ let pfChart = null;
 let weeklyChart = null;
 let priceLines = [];
 let overlaySig = '';
+let confirmCallback = null;
+
 const refreshIcons = () => { try { if (window.lucide) window.lucide.createIcons(); } catch (e) {} };
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const fmtPrice = (n) => { n = Number(n); if (!isFinite(n)) return '-'; const a = Math.abs(n); if (a >= 1000) return fmt(n); if (a >= 1) return n.toFixed(4); return n.toPrecision(4); };
@@ -258,6 +271,23 @@ function showToast(message, type = 'info') {
         toast.style.transition = 'all 0.3s ease';
         setTimeout(() => toast.remove(), 300);
     }, 2500);
+}
+
+function showConfirm(title, message, callback) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-message').textContent = message;
+    confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+    document.getElementById('confirm-modal').classList.add('flex');
+}
+
+function closeConfirm(isConfirmed) {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    document.getElementById('confirm-modal').classList.remove('flex');
+    if (isConfirmed && confirmCallback) {
+        confirmCallback();
+    }
+    confirmCallback = null;
 }
 
 function switchTab(tabName, btn) {
@@ -304,31 +334,32 @@ function updatePauseButton(isPaused) {
 }
 
 async function closePosition(id, symbol) {
-    if(!confirm(`Close ${symbol}?`)) return;
-    try {
-        const res = await fetch(`/api/close_position/${id}`, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) showToast(`Closed ${symbol}`, 'success');
-        else showToast('Error: ' + (data.error || 'close failed'), 'error');
-    } catch (e) { showToast('Failed to close position', 'error'); }
-    load();
+    showConfirm('إغلاق الصفقة', `هل أنت متأكد من إغلاق صفقة ${symbol} الآن؟`, async () => {
+        try {
+            const res = await fetch(`/api/close_position/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) showToast(`Closed ${symbol}`, 'success');
+            else showToast('Error: ' + (data.error || 'close failed'), 'error');
+        } catch (e) { showToast('Failed to close position', 'error'); }
+        load();
+    });
 }
 
-async function runAutoTune() {
-    if(!confirm('هل تريد تشغيل الضبط التلقائي؟ سيختبر البوت أفضل الإعدادات ويطبقها على نفسه.')) return;
-    showToast('Auto-Tuning in progress... (Please wait)', 'info');
-    
-    try {
-        const res = await fetch('/api/auto_tune?symbol=BTCUSDT&strategy=trend', { method: 'POST' });
-        const data = await res.json();
-        if(data.success) {
-            showToast(`Done! Best: RSI ${data.best_params.RSI} & EMA ${data.best_params.EMA} (${data.return_pct.toFixed(1)}%)`, 'success');
-        } else {
-            showToast("Error: " + data.error, 'error');
+function runAutoTune() {
+    showConfirm('الضبط التلقائي', 'هل تريد تشغيل الضبط التلقائي؟ سيختبر البوت أفضل الإعدادات ويطبقها على نفسه.', async () => {
+        showToast('Auto-Tuning in progress... (Please wait)', 'info');
+        try {
+            const res = await fetch('/api/auto_tune?symbol=BTCUSDT&strategy=trend', { method: 'POST' });
+            const data = await res.json();
+            if(data.success) {
+                showToast(`Done! Best: RSI ${data.best_params.RSI} & EMA ${data.best_params.EMA} (${data.return_pct.toFixed(1)}%)`, 'success');
+            } else {
+                showToast("Error: " + data.error, 'error');
+            }
+        } catch(e) {
+            showToast("Failed to auto-tune", 'error');
         }
-    } catch(e) {
-        showToast("Failed to auto-tune", 'error');
-    }
+    });
 }
 
 function openBacktest() { document.getElementById('backtest-modal').classList.remove('hidden'); document.getElementById('backtest-modal').classList.add('flex'); }
