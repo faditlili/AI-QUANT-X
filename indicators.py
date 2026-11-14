@@ -85,6 +85,9 @@ def compute_frame(frame):
     # VWAP
     typical_price = (high + low + close) / 3
     df["vwap"] = (typical_price * df.volume).cumsum() / df.volume.cumsum()
+    # VWAP متحرك لآخر 24 شمعة: يستجيب أسرع من VWAP الذي يمتد على كل النافذة
+    vol24 = df.volume.rolling(24, min_periods=1).sum().replace(0, np.nan)
+    df["vwap24"] = ((typical_price * df.volume).rolling(24, min_periods=1).sum() / vol24).fillna(close)
 
     # Order Flow (Taker Buy Ratio)
     df["taker_buy_ratio"] = (df.get("taker_buy_volume", df.volume * 0.5) / df.volume.replace(0, 1)).fillna(0.5)
@@ -97,7 +100,7 @@ def compute_frame(frame):
 
 _KEYS = ("ema9","ema21","ema50","rsi","atr","adx","plus_di","minus_di","volume_sma","volume_ratio",
          "bb_mid","bb_upper","bb_lower","zscore","bb_width","bb_width_pctile",
-         "donchian_high","donchian_low","atr_pctile", "vwap", "taker_buy_ratio", "swing_high", "swing_low")
+         "donchian_high","donchian_low","atr_pctile", "vwap", "vwap24", "taker_buy_ratio", "swing_high", "swing_low")
 
 def snapshot(df, i=-1):
     r = df.iloc[i]
@@ -108,7 +111,8 @@ def snapshot(df, i=-1):
         "ema_fast": out["ema9"], "ema_medium": out["ema21"], "ema_slow": out["ema50"],
         "squeeze": bool(r["squeeze"]),
         "candles": int(len(df) if i == -1 else (i % len(df)) + 1),
-        "vwap": out.get("vwap", price)
+        "vwap": out.get("vwap", price),
+        "vwap24": out.get("vwap24", price)
     })
     return out
 
