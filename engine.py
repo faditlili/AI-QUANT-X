@@ -20,6 +20,7 @@ class Engine:
         self.running=False; self.task=None; self.monitor_task=None; self.last_scan=None; self.last_error=None
         self.paused=self.db.get_state("paused","0")=="1"
         self.notifier=None
+        self.compass={}
 
     async def start(self):
         await self.market.start()
@@ -52,6 +53,18 @@ class Engine:
         frame=await self.market.get_klines(symbol,tf,config.KLINE_LIMIT,source)
         return calculate_indicators(frame)
 
+    async def _compute_compass(self,source):
+        """اتجاه BTC وETH على إطار الساعة: BULLISH/BEARISH إذا اتفقا، وإلا NEUTRAL. عند أي فشل: None (بلا تأثير)."""
+        if not getattr(config,"USE_BTC_COMPASS",False): return None
+        dirs=[]
+        for sym in config.DIRECTION_SYMBOLS:
+            try: dirs.append(direction(await self._indicators(sym,source,config.PRIMARY_TIMEFRAME)))
+            except Exception as exc:
+                log.warning("Compass unavailable (%s/%s): %s",source,sym,exc); return None
+        if dirs and all(d=="BULLISH" for d in dirs): return "BULLISH"
+        if dirs and all(d=="BEARISH" for d in dirs): return "BEARISH"
+        return "NEUTRAL"
+
     async def _analyze(self,symbol,source, macro_ctx):
         frames={}
         for tf in config.TIMEFRAMES:
@@ -63,7 +76,7 @@ class Engine:
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         
-        ctx={"source":source,"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
+        ctx={"source":source,"symbol":symbol,"compass":macro_ctx.get("compass"),"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
              "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour}
              
@@ -76,6 +89,9 @@ class Engine:
         if time.time()-float(self.db.get_state(f"cooldown:{source}:{symbol}","0")) < config.SIGNAL_COOLDOWN_SECONDS:
             return
 
+        if time.time() < float(self.db.get_state(f"lock:{symbol}","0")):
+            return  # العملة مقفولة بعد خسارة بوقف الخسارة
+
         open_positions = self.db.get_open_positions()
         if any(p["symbol"] == symbol for p in open_positions):
             return 
@@ -83,7 +99,8 @@ class Engine:
         open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
         
         if open_symbols:
-            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=0.80)
+            # العتبة تُضبط من config.CORRELATION_MAX
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=getattr(config,"CORRELATION_MAX",0.85))
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
                 log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
@@ -125,7 +142,11 @@ class Engine:
         for source in config.MARKET_SOURCES:
             try:
                 breadth = await self.market.get_market_breadth(source)
-                macro_ctx = {"fng": fng, "breadth": breadth}
+                compass = await self._compute_compass(source)
+                if compass != self.compass.get(source):
+                    log.info("BTC/ETH compass (%s): %s",source,compass)
+                    self.compass[source] = compass
+                macro_ctx = {"fng": fng, "breadth": breadth, "compass": compass}
                 
                 tickers=await self.market.get_tickers_24h(source)
                 closed_positions=self.trader.update_market_prices(tickers,source)
@@ -151,4 +172,4 @@ class Engine:
 
     def get_status(self):
         return {"running":self.running,"paused":self.paused,"last_scan":self.last_scan,
-                "last_error":self.last_error,"mode":"PAPER SIMULATION"}
+                "last_error":self.last_error,"mode":"PAPER SIMULATION","compass":self.compass}
