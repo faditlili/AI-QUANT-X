@@ -26,7 +26,6 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
-# --- القائمة النخبة: أفضل 30 عملة (تم تحديثها بناءً على تعديلات Binance) ---
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
@@ -51,19 +50,19 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
-CORRELATION_MAX = 0.92   # أقصى ارتباط مسموح بين صفقتين مفتوحتين (0.85 أشد، 0.98 شبه معطّل)
-PAIR_LOCK_AFTER_STOPLOSS_MIN = 120   # بعد خسارة بوقف الخسارة: لا نعيد فتح العملة نفسها لهذه المدة بالدقائق (0 = معطّل)
-USE_BTC_COMPASS = True     # بوصلة BTC/ETH (إطار الساعة): لا نشتري عندما يهبطان معاً ولا نبيع عندما يصعدان معاً (للعملات الأخرى فقط)
-USE_ROLLING_VWAP = True    # VWAP لآخر 24 ساعة بدل 8 أيام (False = السلوك القديم)
-STRICT_HTF_CONFIRM = False # False: يكفي ألا يعاكس إطار 4 ساعات الصفقة. True = السلوك القديم (يجب أن يوافقها)
-MAX_SAME_SIDE = 3        # أقصى عدد صفقات مفتوحة في الاتجاه نفسه (شراء أو بيع). ضع 5 لتعطيله
+CORRELATION_MAX = 0.92   
+PAIR_LOCK_AFTER_STOPLOSS_MIN = 120   
+USE_BTC_COMPASS = True     
+USE_ROLLING_VWAP = True    
+STRICT_HTF_CONFIRM = False 
+MAX_SAME_SIDE = 3        
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
 # Strategy layer
 STRATEGIES = tuple(s.strip() for s in os.getenv(
-    "STRATEGIES", "trend,mean_reversion,breakout").split(",") if s.strip())
+    "STRATEGIES", "trend,mean_reversion,breakout,dip_buyer").split(",") if s.strip())
 HIGH_VOL_PERCENTILE = 95
 TREND_ADX_MIN = 22
 RANGE_ADX_MAX = 20
@@ -88,21 +87,22 @@ BACKTEST_INTERVAL = "1h"
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = 1.0     # مخاطرة 1% (2 دولار)
+RISK_PER_TRADE_PCT = 1.0     
 MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 25.0    # سقف الصفقة 25% من الرصيد: تتسع 4 صفقات معاً (تنويع أكبر وصفقات أكثر)
+MAX_ALLOCATION_PCT = 25.0    
 DAILY_LOSS_LIMIT_PCT = 3.0
 
-# Fees
-FEE_RATE = 0.0004            # عمولة الفيوتشرز
-FEE_RATE_SPOT = 0.001        # عمولة السبوت
+# Fees & Notional
+FEE_RATE = 0.0004            
+FEE_RATE_SPOT = 0.001        
+MIN_NOTIONAL_USDT = 10.0     # <--- أضفنا هذا السطر هنا
 
 def fee_rate(source):
     return FEE_RATE if source == "futures" else FEE_RATE_SPOT
 
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
-MIN_TARGET_PCT = 0.5         # <--- تم التعديل إلى 0.5% لكي لا يرفض البوت الصفقات
+MIN_TARGET_PCT = 0.5         
 REWARD_RISK_RATIO = 2.0
 MAX_NEWS_RISK = 0.70
 
