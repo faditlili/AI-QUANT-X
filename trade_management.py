@@ -18,12 +18,10 @@ def next_stop(side, entry, initial_stop, stop, price, trailing=None, fee=None):
     gain_r = (price - entry) * sign / r
     new = stop
     
-    # 1. Break-even
     if gain_r >= config.BREAKEVEN_AT_R:
         be = entry * (1 + sign * (2 * fee + config.SLIPPAGE_BPS / 10000))
         new = max(new, be) if sign == 1 else min(new, be)
         
-    # 2. Chandelier Exit
     if gain_r >= config.TRAIL_START_R:
         trail = price - sign * r * config.TRAIL_DISTANCE_R
         new = max(new, trail) if sign == 1 else min(new, trail)
