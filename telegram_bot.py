@@ -1,5 +1,5 @@
 """Telegram notifications with interactive Inline Buttons."""
-import asyncio, logging
+import asyncio, json, logging
 import config
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -24,6 +24,13 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("balance", self.cmd_balance))
             self.app.add_handler(CommandHandler("risk", self.cmd_risk))          # <--- جديد
             self.app.add_handler(CommandHandler("history", self.cmd_history))    # <--- جديد
+            self.app.add_handler(CommandHandler("profit", self.cmd_profit))
+            self.app.add_handler(CommandHandler("daily", self.cmd_daily))
+            self.app.add_handler(CommandHandler("stats", self.cmd_stats))
+            self.app.add_handler(CommandHandler("pairs", self.cmd_pairs))
+            self.app.add_handler(CommandHandler("count", self.cmd_count))
+            self.app.add_handler(CommandHandler("forceexit", self.cmd_forceexit))
+            self.app.add_handler(CommandHandler("help", self.cmd_help))
             self.app.add_handler(CallbackQueryHandler(self.handle_callback)) 
             
             await self.app.initialize()
@@ -111,7 +118,12 @@ class TelegramNotifier:
         if not rows:
             await update.effective_message.reply_text("لا توجد صفقات مفتوحة حالياً."); return
         for x in rows:
-            text = f"{x['source']} {x['symbol']} {x['side']}\nالكمية: {x['quantity']:.4g}\nالدخول: {x['entry_price']:.4f}"
+            try: mark = float(self.db.get_state(f"mark:{x['id']}", 0) or 0)
+            except (TypeError, ValueError): mark = 0.0
+            sign = 1 if x["side"] == "LONG" else -1
+            pnl = (mark - x["entry_price"]) * x["quantity"] * sign if mark else 0.0
+            text = (f"#{x['id']} {x['source']} {x['symbol']} {x['side']}\nالكمية: {x['quantity']:.4g}\n"
+                    f"الدخول: {x['entry_price']:.4f}\nالربح العائم: {pnl:+.2f} USDT")
             keyboard = [[InlineKeyboardButton(f"إغلاق {x['symbol']}", callback_data=f"close_{x['id']}")]]
             await update.effective_message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -122,6 +134,156 @@ class TelegramNotifier:
     async def cmd_resume(self,update,context):
         if not await self._guard(update): return
         self.engine.set_paused(False); await update.effective_message.reply_text("تم استئناف عمل البوت.")
+
+    # ---------- تقارير على طريقة Freqtrade ----------
+    def _closed_trades(self, limit=5000):
+        rows = [t for t in self.db.get_recent_trades(limit) if t["status"] == "CLOSED"]
+        return sorted(rows, key=lambda t: t["closed_at"] or "")
+
+    @staticmethod
+    def _strategy_of(t):
+        try:
+            meta = t["metadata"]
+            if isinstance(meta, str): meta = json.loads(meta or "{}")
+            return (meta or {}).get("strategy") or "unknown"
+        except Exception:
+            return "unknown"
+
+    @staticmethod
+    def _summary(pnls):
+        wins = [p for p in pnls if p > 0]; losses = [p for p in pnls if p < 0]
+        gl = abs(sum(losses))
+        return {"n": len(pnls), "wins": len(wins), "losses": len(losses), "net": sum(pnls),
+                "wr": (len(wins) / len(pnls) * 100) if pnls else 0.0,
+                "pf": (sum(wins) / gl) if gl > 0 else None,
+                "avg_win": (sum(wins) / len(wins)) if wins else 0.0,
+                "avg_loss": (sum(losses) / len(losses)) if losses else 0.0,
+                "exp": (sum(pnls) / len(pnls)) if pnls else 0.0}
+
+    async def cmd_help(self, update, context):
+        if not await self._guard(update): return
+        await update.effective_message.reply_text(
+            "الأوامر المتاحة:\n\n"
+            "/status - حالة البوت\n/balance - الرصيد\n/positions - الصفقات المفتوحة (مع أرقامها)\n"
+            "/count - عدد الصفقات المفتوحة\n/profit - الربح الكلي والمقاييس\n/daily [أيام] - الأداء اليومي\n"
+            "/stats - إحصاءات حسب سبب الخروج والاستراتيجية\n/pairs - الأداء حسب العملة\n"
+            "/history - آخر 10 صفقات مغلقة\n/performance - ملخص سريع\n/risk - حالة المخاطرة\n"
+            "/forceexit <رقم|all> - إغلاق صفقة أو كل الصفقات\n/pause - إيقاف فتح صفقات جديدة\n/resume - استئناف")
+
+    async def cmd_profit(self, update, context):
+        if not await self._guard(update): return
+        closed = self._closed_trades()
+        if not closed:
+            await update.effective_message.reply_text("لا توجد صفقات مغلقة بعد."); return
+        pnls = [float(t["net_pnl"] or 0) for t in closed]
+        s = self._summary(pnls)
+        initial = float(self.db.get_state("initial_balance", config.INITIAL_BALANCE))
+        port = self.db.get_portfolio()
+        by_pair = {}
+        for t in closed: by_pair[t["symbol"]] = by_pair.get(t["symbol"], 0.0) + float(t["net_pnl"] or 0)
+        best = max(by_pair.items(), key=lambda kv: kv[1]); worst = min(by_pair.items(), key=lambda kv: kv[1])
+        eq = peak = initial; mdd = 0.0
+        for p in pnls:
+            eq += p; peak = max(peak, eq)
+            if peak: mdd = max(mdd, (peak - eq) / peak * 100)
+        pf = "∞" if s["pf"] is None else f"{s['pf']:.2f}"
+        await update.effective_message.reply_text(
+            "💰 الربح الكلي\n\n"
+            f"الصفقات المغلقة: {s['n']} (رابحة {s['wins']} / خاسرة {s['losses']})\n"
+            f"نسبة النجاح: {s['wr']:.1f}%\n"
+            f"صافي الربح: {s['net']:+.2f} USDT ({s['net'] / initial * 100:+.2f}%)\n"
+            f"الربح العائم: {port['unrealized_pnl']:+.2f} USDT\n"
+            f"متوسط الربح: {s['avg_win']:+.2f} | متوسط الخسارة: {s['avg_loss']:+.2f}\n"
+            f"التوقع لكل صفقة: {s['exp']:+.2f} USDT\n"
+            f"معامل الربح: {pf}\n"
+            f"أقصى تراجع محقق: {mdd:.1f}%\n"
+            f"أفضل عملة: {best[0]} ({best[1]:+.2f})\n"
+            f"أسوأ عملة: {worst[0]} ({worst[1]:+.2f})")
+
+    async def cmd_daily(self, update, context):
+        if not await self._guard(update): return
+        try: days = int(context.args[0]) if getattr(context, "args", None) else 7
+        except (ValueError, TypeError, IndexError): days = 7
+        days = max(1, min(days, 30))
+        agg = {}
+        for t in self._closed_trades():
+            d = (t["closed_at"] or "")[:10]
+            if d:
+                a = agg.setdefault(d, [0.0, 0]); a[0] += float(t["net_pnl"] or 0); a[1] += 1
+        last = sorted(agg.items(), reverse=True)[:days]
+        if not last:
+            await update.effective_message.reply_text("لا توجد صفقات مغلقة بعد."); return
+        lines = [f"{'🟢' if v[0] > 0 else '🔴' if v[0] < 0 else '⚪'} {d}: {v[0]:+.2f} USDT ({v[1]} صفقات)" for d, v in last]
+        total = sum(v[0] for _, v in last)
+        await update.effective_message.reply_text(f"📅 الأداء اليومي (UTC)\n\n" + "\n".join(lines) + f"\n\nالمجموع: {total:+.2f} USDT")
+
+    async def cmd_stats(self, update, context):
+        if not await self._guard(update): return
+        closed = self._closed_trades()
+        if not closed:
+            await update.effective_message.reply_text("لا توجد صفقات مغلقة بعد."); return
+        def block(title, keyfn):
+            groups = {}
+            for t in closed: groups.setdefault(keyfn(t), []).append(float(t["net_pnl"] or 0))
+            out = [title]
+            for k, v in sorted(groups.items(), key=lambda kv: -sum(kv[1])):
+                s = self._summary(v)
+                out.append(f"• {k}: {s['n']} صفقة | نجاح {s['wr']:.0f}% | {s['net']:+.2f} USDT")
+            return "\n".join(out)
+        await update.effective_message.reply_text(
+            "📊 إحصاءات\n\n" + block("حسب سبب الخروج:", lambda t: t["exit_reason"] or "?") + "\n\n" +
+            block("حسب الاستراتيجية:", self._strategy_of) + "\n\n" +
+            block("حسب الاتجاه:", lambda t: t["side"]) + "\n\n" + block("حسب السوق:", lambda t: t["source"]))
+
+    async def cmd_pairs(self, update, context):
+        if not await self._guard(update): return
+        closed = self._closed_trades()
+        if not closed:
+            await update.effective_message.reply_text("لا توجد صفقات مغلقة بعد."); return
+        groups = {}
+        for t in closed: groups.setdefault(t["symbol"], []).append(float(t["net_pnl"] or 0))
+        rows = sorted(groups.items(), key=lambda kv: -sum(kv[1]))[:15]
+        lines = []
+        for sym, v in rows:
+            s = self._summary(v)
+            lines.append(f"{'🟢' if s['net'] > 0 else '🔴'} {sym}: {s['net']:+.2f} USDT ({s['n']} صفقة، نجاح {s['wr']:.0f}%)")
+        await update.effective_message.reply_text("🪙 الأداء حسب العملة\n\n" + "\n".join(lines))
+
+    async def cmd_count(self, update, context):
+        if not await self._guard(update): return
+        pos = self.db.get_open_positions(); port = self.db.get_portfolio()
+        longs = sum(1 for p in pos if p["side"] == "LONG")
+        await update.effective_message.reply_text(
+            f"🔢 الصفقات المفتوحة: {len(pos)}/{config.MAX_OPEN_POSITIONS}\n"
+            f"شراء: {longs} | بيع: {len(pos) - longs} (الحد في الاتجاه الواحد: {getattr(config, 'MAX_SAME_SIDE', '-')})\n"
+            f"النقد المتاح: {port['cash_balance']:.2f} USDT")
+
+    async def cmd_forceexit(self, update, context):
+        if not await self._guard(update): return
+        args = getattr(context, "args", None) or []
+        if not args:
+            await update.effective_message.reply_text("الاستخدام: /forceexit <رقم الصفقة> أو /forceexit all"); return
+        target = str(args[0]).lower()
+        positions = self.db.get_open_positions()
+        if target != "all":
+            try: pid = int(target.lstrip("#"))
+            except ValueError:
+                await update.effective_message.reply_text("رقم غير صالح. استخدم رقم الصفقة من /positions."); return
+            positions = [p for p in positions if p["id"] == pid]
+        if not positions:
+            await update.effective_message.reply_text("لا توجد صفقة مفتوحة مطابقة."); return
+        prices, done = {}, 0
+        for p in positions:
+            try:
+                if p["source"] not in prices: prices[p["source"]] = await self.engine.market.get_last_prices(p["source"])
+                item = prices[p["source"]].get(p["symbol"])
+                if not item: continue
+                res = self.engine.trader.close_position(p["id"], item["last_price"], "FORCE_EXIT")
+                if res:
+                    done += 1; await self.notify_trade_closed(res)
+            except Exception as exc:
+                log.warning("forceexit failed for %s: %s", p["symbol"], exc)
+        await update.effective_message.reply_text(f"تم إغلاق {done} من {len(positions)} صفقة.")
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self._guard(update): return
