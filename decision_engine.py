@@ -28,8 +28,15 @@ def evaluate_setup(technical,source="futures",timeframe_confirmed=False,news_ris
     side=technical.get("side")
     if side=="SHORT" and source=="spot":
         return {"action":"HOLD","reason":"Spot simulation does not open short positions"}
-    if side not in ("LONG","SHORT") or technical.get("score",0)<config.MIN_SIGNAL_SCORE:
-        return {"action":"HOLD","reason":reason or "Score below threshold"}
+    if side not in ("LONG","SHORT"):
+        return {"action":"HOLD","reason":reason or "No direction"}
+    score=technical.get("score",0)
+    if score<config.MIN_SIGNAL_SCORE:
+        return {"action":"HOLD","reason":"Score %s below %s: %s" % (score,config.MIN_SIGNAL_SCORE,reason)}
     if not timeframe_confirmed or news_risk>=config.MAX_NEWS_RISK:
-        return {"action":"HOLD","reason":"Timeframe confirmation or news-risk gate failed"}
+        blockers=list(technical.get("blockers") or [])
+        if news_risk>=config.MAX_NEWS_RISK:
+            blockers.append("News risk %.2f" % news_risk)
+        why="; ".join(blockers) or "Timeframe confirmation failed"
+        return {"action":"HOLD","reason":"Blocked: "+why}
     return {"action":"PAPER_BUY" if side=="LONG" else "PAPER_SHORT","side":side,"reason":reason}
