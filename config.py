@@ -7,7 +7,7 @@ except ImportError:
     pass
 
 APP_NAME = "AI QUANT X"
-APP_VERSION = "5.0.0"
+APP_VERSION = "6.0.0"
 PAPER_MODE = True
 TRADING_MODE = "PAPER SIMULATION"
 
@@ -26,7 +26,6 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
-# --- القائمة النخبة: أفضل 50 عملة ---
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
@@ -51,9 +50,7 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
-
-# --- إعدادات الحماية والارتباط (الخلطة المثالية) ---
-CORRELATION_MAX = float(os.getenv("CORRELATION_MAX", "0.85")) # 0.85 هي العتبة الذهبية
+CORRELATION_MAX = float(os.getenv("CORRELATION_MAX", "0.85")) 
 PAIR_LOCK_AFTER_STOPLOSS_MIN = int(os.getenv("PAIR_LOCK_AFTER_STOPLOSS_MIN", "120"))
 USE_BTC_COMPASS = os.getenv("USE_BTC_COMPASS", "true").lower() == "true"
 USE_ROLLING_VWAP = os.getenv("USE_ROLLING_VWAP", "true").lower() == "true"
@@ -64,43 +61,37 @@ MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
-# Strategy layer
 STRATEGIES = tuple(s.strip() for s in os.getenv(
     "STRATEGIES", "trend,mean_reversion,breakout,dip_buyer").split(",") if s.strip())
 HIGH_VOL_PERCENTILE = 95
 TREND_ADX_MIN = 22
 RANGE_ADX_MAX = 20
 
-# Trade management
 TRAILING_ENABLED = os.getenv("TRAILING_ENABLED", "true").lower() == "true"
 BREAKEVEN_AT_R = 1.0
 TRAIL_START_R = 2.0
 TRAIL_DISTANCE_R = 0.8
 
-# Portfolio protection
 MAX_CONSECUTIVE_LOSSES = 4
 LOSS_STREAK_PAUSE_SECONDS = 6 * 3600
 MAX_DRAWDOWN_PCT = 15.0
 DRAWDOWN_PAUSE_SECONDS = 24 * 3600
 
-# Backtest
 BACKTEST_CANDLES = int(os.getenv("BACKTEST_CANDLES", "2000"))
 BACKTEST_INTERVAL = "1h"
-
-# Dashboard protection (empty = open)
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
-# --- الوضع الهجومي (10% Heat) ---
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
+# سيقوم "عقل البوت" بتعديل هذه النسبة ديناميكياً بناءً على الأداء
 RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "2.0"))     
 MAX_PORTFOLIO_RISK_PCT = float(os.getenv("MAX_PORTFOLIO_RISK_PCT", "10.0"))
 MAX_ALLOCATION_PCT = float(os.getenv("MAX_ALLOCATION_PCT", "100.0"))    
 DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "3.0"))
 
+# Institutional Heat Management
 MAX_DIRECTIONAL_HEAT_PCT = float(os.getenv("MAX_DIRECTIONAL_HEAT_PCT", "10.0"))
 MAX_TOTAL_HEAT_PCT = float(os.getenv("MAX_TOTAL_HEAT_PCT", "20.0"))
 
-# Fees & Notional
 FEE_RATE = 0.0004            
 FEE_RATE_SPOT = 0.001        
 MIN_NOTIONAL_USDT = 10.0     
@@ -126,10 +117,9 @@ TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "") 
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
-USER_AGENT = "AI-QUANT-X-Paper/4.1"
+USER_AGENT = "AI-QUANT-X-Paper/6.0"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# --- Advanced Filters ---
 USE_FUNDING_RATE_FILTER = os.getenv("USE_FUNDING_RATE_FILTER", "true").lower() == "true"
 MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
@@ -144,16 +134,10 @@ SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
 def validate_config():
-    if not PAPER_MODE:
-        raise RuntimeError("This build is paper-simulation only.")
-    if not SYMBOLS:
-        raise ValueError("SYMBOLS cannot be empty.")
-    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 10:
-        raise ValueError("Aggregate portfolio risk must be in (0, 10].")
-    if not 0 < RISK_PER_TRADE_PCT <= MAX_PORTFOLIO_RISK_PCT:
-        raise ValueError("Invalid per-position risk.")
-    if not 0 < MAX_ALLOCATION_PCT <= 100:
-        raise ValueError("Invalid allocation cap.")
-    if DB_PATH == ":memory:":
-        return True
+    if not PAPER_MODE: raise RuntimeError("This build is paper-simulation only.")
+    if not SYMBOLS: raise ValueError("SYMBOLS cannot be empty.")
+    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 20: raise ValueError("Aggregate portfolio risk must be in (0, 20].")
+    if not 0 < RISK_PER_TRADE_PCT <= MAX_PORTFOLIO_RISK_PCT: raise ValueError("Invalid per-position risk.")
+    if not 0 < MAX_ALLOCATION_PCT <= 100: raise ValueError("Invalid allocation cap.")
+    if DB_PATH == ":memory:": return True
     return True
