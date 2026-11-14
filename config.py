@@ -82,13 +82,11 @@ BACKTEST_INTERVAL = "1h"
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-# سيقوم "عقل البوت" بتعديل هذه النسبة ديناميكياً بناءً على الأداء
 RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "2.0"))     
 MAX_PORTFOLIO_RISK_PCT = float(os.getenv("MAX_PORTFOLIO_RISK_PCT", "10.0"))
 MAX_ALLOCATION_PCT = float(os.getenv("MAX_ALLOCATION_PCT", "100.0"))    
 DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "3.0"))
 
-# Institutional Heat Management
 MAX_DIRECTIONAL_HEAT_PCT = float(os.getenv("MAX_DIRECTIONAL_HEAT_PCT", "10.0"))
 MAX_TOTAL_HEAT_PCT = float(os.getenv("MAX_TOTAL_HEAT_PCT", "20.0"))
 
