@@ -1,4 +1,4 @@
-"""Asynchronous paper-simulation engine with Macro Filters and Correlation."""
+"""Asynchronous paper-simulation engine."""
 import asyncio, logging, time
 import datetime
 import config
@@ -25,11 +25,16 @@ class Engine:
     async def start(self):
         await self.market.start()
         await self.news.start()
+        
+        # تحميل إعدادات Auto-Tune
+        saved_rsi = self.db.get_state("auto_rsi")
+        saved_ema = self.db.get_state("auto_ema")
+        if saved_rsi: config.RSI_PERIOD = int(saved_rsi)
+        if saved_ema: config.EMA_FAST = int(saved_ema)
+        
         self.running=True
-        if self.task is None or self.task.done():
-            self.task=asyncio.create_task(self._run())
-        if self.monitor_task is None or self.monitor_task.done():
-            self.monitor_task=asyncio.create_task(self._monitor_loop())
+        if self.task is None or self.task.done(): self.task=asyncio.create_task(self._run())
+        if self.monitor_task is None or self.monitor_task.done(): self.monitor_task=asyncio.create_task(self._monitor_loop())
 
     async def stop(self):
         self.running=False
@@ -54,7 +59,6 @@ class Engine:
         return calculate_indicators(frame)
 
     async def _compute_compass(self,source):
-        """اتجاه BTC وETH على إطار الساعة: BULLISH/BEARISH إذا اتفقا، وإلا NEUTRAL. عند أي فشل: None (بلا تأثير)."""
         if not getattr(config,"USE_BTC_COMPASS",False): return None
         dirs=[]
         for sym in config.DIRECTION_SYMBOLS:
@@ -90,20 +94,16 @@ class Engine:
             return
 
         if time.time() < float(self.db.get_state(f"lock:{symbol}","0")):
-            return  # العملة مقفولة بعد خسارة بوقف الخسارة
+            return 
 
         open_positions = self.db.get_open_positions()
-        if any(p["symbol"] == symbol for p in open_positions):
-            return 
+        if any(p["symbol"] == symbol for p in open_positions): return 
             
         open_symbols = [p["symbol"] for p in open_positions if p["source"] == source]
-        
         if open_symbols:
-            # العتبة تُضبط من config.CORRELATION_MAX
-            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=getattr(config,"CORRELATION_MAX",0.85))
+            is_corr, corr_reason = await is_highly_correlated(symbol, open_symbols, self.market, threshold=config.CORRELATION_MAX)
             if is_corr:
                 self.db.add_decision(symbol, source, "HOLD", result["score"], f"Blocked by Correlation: {corr_reason}")
-                log.info(f"Trade blocked by correlation: {symbol} - {corr_reason}")
                 return
         
         opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
@@ -115,24 +115,20 @@ class Engine:
         if opened.get("success"):
             self.db.add_decision(symbol,source,result["action"],result["score"],result["reason"])
             self.db.set_state(f"cooldown:{source}:{symbol}",time.time())
-            log.info("Paper position opened: %s %s %s (%s)",source,symbol,result["side"],result["strategy"])
-            if self.notifier:
-                await self.notifier.notify_trade_opened(opened["position"])
+            if self.notifier: await self.notifier.notify_trade_opened(opened["position"])
 
     async def monitor_positions(self):
         sources={p["source"] for p in self.db.get_open_positions()}
         for source in sources:
             prices=await self.market.get_last_prices(source)
             for closed in self.trader.update_market_prices(prices,source):
-                if closed and self.notifier:
-                    await self.notifier.notify_trade_closed(closed)
+                if closed and self.notifier: await self.notifier.notify_trade_closed(closed)
 
     async def _monitor_loop(self):
         while self.running:
             try: await self.monitor_positions()
             except asyncio.CancelledError: raise
-            except Exception as exc:
-                log.warning("Position monitor error: %s",exc)
+            except Exception as exc: log.warning("Position monitor error: %s",exc)
             await asyncio.sleep(config.POSITION_CHECK_SECONDS)
 
     async def scan_once(self):
@@ -152,17 +148,13 @@ class Engine:
                 closed_positions=self.trader.update_market_prices(tickers,source)
                 if self.notifier:
                     for closed in closed_positions:
-                        if closed:
-                            await self.notifier.notify_trade_closed(closed)
-                if self.paused:
-                    continue
+                        if closed: await self.notifier.notify_trade_closed(closed)
+                if self.paused: continue
                 symbols=await self.market.liquid_symbols(source)
                 for symbol in symbols:
                     try: await self._analyze(symbol,source, macro_ctx)
-                    except Exception as exc:
-                        log.warning("Analysis skipped %s/%s: %s",source,symbol,exc)
-            except Exception as exc:
-                log.warning("Source scan failed (%s): %s",source,exc)
+                    except Exception as exc: log.warning("Analysis skipped %s/%s: %s",source,symbol,exc)
+            except Exception as exc: log.warning("Source scan failed (%s): %s",source,exc)
         
         self.db.snapshot()
         self.db.prune()
