@@ -1,4 +1,5 @@
 """Virtual fills only. Includes Scale-Out logic."""
+import time
 import config
 from trade_management import next_stop
 
@@ -9,7 +10,7 @@ class PaperTrader:
         self.risk=risk_manager or RiskManager(database)
 
     def open_position(self,symbol,price,atr,side="LONG",source="futures",metadata=None,stop_mult=None,rr=None,strategy=None):
-        sized,reason=self.risk.calculate_position_size(symbol,source,side,float(price),float(atr),stop_mult,rr)
+        sized,reason=self.risk.calculate_position_size(symbol,source,side,float(price),float(atr),stop_mult,rr,strategy)
         if not sized: return {"success":False,"reason":reason}
         slip=config.SLIPPAGE_BPS/10000
         entry=price*(1+slip if side=="LONG" else 1-slip)
@@ -19,7 +20,7 @@ class PaperTrader:
               "entry_price":entry,"stop_price":stop,"target_price":sized["target_price"],
               "margin_used":entry*sized["quantity"],"risk_amount":risk,
               "opening_fee":entry*sized["quantity"]*config.fee_rate(source),
-              "initial_stop":stop,"strategy":strategy,"metadata":metadata or {}}
+              "initial_stop":stop,"strategy":strategy,"metadata":{**(metadata or {}),"strategy":strategy}}
         try:
             pos=self.db.create_position(data)
             return {"success":True,"position":pos}
@@ -32,7 +33,11 @@ class PaperTrader:
         slip=config.SLIPPAGE_BPS/10000
         exit_price=price*(1-slip if pos["side"]=="LONG" else 1+slip)
         fee=exit_price*pos["quantity"]*config.fee_rate(pos["source"])
-        return self.db.close_position(pid,exit_price,reason,fee)
+        row=self.db.close_position(pid,exit_price,reason,fee)
+        lock_min=getattr(config,"PAIR_LOCK_AFTER_STOPLOSS_MIN",0)
+        if row and reason=="STOP_LOSS" and lock_min>0:
+            self.db.set_state(f"lock:{pos['symbol']}",time.time()+lock_min*60)
+        return row
 
     def _manage_stop(self,pos,price):
         return next_stop(pos["side"],pos["entry_price"],pos.get("initial_stop"),pos["stop_price"],price,fee=config.fee_rate(pos["source"]))
