@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition with Custom Modals."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition with Theme Switcher."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
@@ -12,63 +12,152 @@ _bt_running=False
 @router.get("/", response_class=HTMLResponse)
 async def dashboard():
     return HTMLResponse("""<!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>AI QUANT X · SaaS Dashboard</title>
+  <title>AI QUANT X · Pro Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
+    // ربط ألوان Tailwind بمتغيرات CSS لكي تتغير ديناميكياً
     tailwind.config = {
+      darkMode: 'class',
       theme: { 
         extend: { 
           colors: { 
-            brand: { bg: '#f8fafc', card: '#ffffff', border: '#e2e8f0', text: '#0f172a', muted: '#64748b' },
-            green: '#10b981', red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6', neutral: '#94a3b8'
+            brand: { bg: 'var(--bg)', card: 'var(--glass-bg)', border: 'var(--glass-border)' }, 
+            neon: { 
+              cyan: 'var(--primary)', 
+              green: 'var(--up-color)', 
+              red: 'var(--down-color)', 
+              purple: 'var(--secondary)' 
+            } 
           }, 
-          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'] } 
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } 
         } 
       }
     }
   </script>
   <style>
-    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; color: #0f172a; -webkit-tap-highlight-color: transparent; }
-    .card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03); border-radius: 1rem; transition: all 0.2s ease; }
-    .card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); transform: translateY(-2px); }
+    /* --- Dynamic Theme Variables --- */
+    :root, body.theme-cyber {
+        --bg: #020308;
+        --bg-grid: rgba(0, 243, 255, 0.02);
+        --primary: #00f3ff;
+        --secondary: #b026ff;
+        --glass-bg: rgba(10, 15, 30, 0.65);
+        --glass-border: rgba(0, 243, 255, 0.15);
+        --up-color: #00ff66;
+        --down-color: #ff003c;
+        --card-shadow: 0 4px 30px rgba(0,0,0,0.5);
+        --btn-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(255, 255, 255, 0.05), inset 0px 1px 1px rgba(255, 255, 255, 0.2);
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+    }
+
+    body.theme-matrix {
+        --bg: #020a05;
+        --bg-grid: rgba(0, 255, 102, 0.03);
+        --primary: #00ff66;
+        --secondary: #00cc44;
+        --up-color: #00ff66;
+        --down-color: #ff003c;
+    }
+
+    body.theme-gold {
+        --bg: #0b0e11;
+        --bg-grid: rgba(252, 213, 53, 0.03);
+        --primary: #FCD535;
+        --secondary: #F0B90B;
+        --up-color: #0ecb81;
+        --down-color: #f6465d;
+    }
+
+    body.theme-neumorphism {
+        --bg: #1e2129;
+        --bg-grid: rgba(255, 255, 255, 0.0);
+        --primary: #4ade80;
+        --secondary: #818cf8;
+        --glass-bg: #1e2129;
+        --glass-border: transparent;
+        --up-color: #4ade80;
+        --down-color: #f87171;
+        --card-shadow: 8px 8px 16px #14161b, -8px -8px 16px #282c37;
+        --btn-shadow: 5px 5px 10px #14161b, -5px -5px 10px #282c37;
+        --text-main: #e2e8f0;
+        --text-muted: #94a3b8;
+    }
+
+    body.theme-light {
+        --bg: #f3f4f6;
+        --bg-grid: rgba(0, 0, 0, 0.02);
+        --primary: #3b82f6;
+        --secondary: #f97316;
+        --glass-bg: #ffffff;
+        --glass-border: #e5e7eb;
+        --up-color: #10b981;
+        --down-color: #ef4444;
+        --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        --btn-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        --text-main: #111827;
+        --text-muted: #6b7280;
+    }
+    body.theme-light { background-color: var(--bg); color: var(--text-main); }
+    body.theme-light h1, body.theme-light h2, body.theme-light h3, body.theme-light .text-white { color: var(--text-main) !important; }
+    body.theme-light .text-slate-200, body.theme-light .text-slate-300, body.theme-light .text-slate-400 { color: var(--text-muted) !important; }
+    body.theme-light .ticker-wrap { background: #fff; border-color: #e5e7eb; }
+    body.theme-light .ticker span { color: var(--text-main); }
+    body.theme-light .glass { background: #fff; border-color: #e5e7eb; }
+    body.theme-light .liquid-card { background: #fff; border-color: #e5e7eb; }
+    body.theme-light .liquid-btn { background: #fff; border-color: #e5e7eb; color: var(--text-main); }
+    body.theme-light #neural-logs { background: #f9fafb; color: var(--text-main); }
+    body.theme-light .text-slate-500 { color: #9ca3af !important; }
+    body.theme-light .text-slate-600 { color: #4b5563 !important; }
+
+    body { background-color: var(--bg); background-image: radial-gradient(circle at 50% 0%, var(--bg-grid) 0%, transparent 60%), linear-gradient(var(--bg-grid) 1px, transparent 1px), linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; transition: background-color 0.5s ease; color: var(--text-main); font-family: 'Inter', sans-serif; }
+    
+    .glass { background: var(--glass-bg); backdrop-filter: blur(16px); border: 1px solid var(--glass-border); box-shadow: var(--card-shadow); transition: all 0.5s ease; border-radius: 1rem; }
+    .liquid-card { background: var(--glass-bg); box-shadow: var(--card-shadow); border: 1px solid var(--glass-border); border-radius: 1rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .liquid-btn { background: var(--glass-bg); box-shadow: var(--btn-shadow); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); transition: all 0.2s ease; }
+    .liquid-btn:active { transform: scale(0.98); }
+
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
-    .tab-btn { padding: 0.75rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
-    .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    
+    .tab-btn { padding: 0.75rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast { animation: slideDown 0.3s ease-out forwards; }
   </style>
 </head>
-<body class="min-h-screen pb-10">
+<body class="theme-cyber min-h-screen pb-10">
 
   <div id="toast-container" class="fixed top-4 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
 
-  <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+  <nav class="glass border-b sticky top-0 z-30" style="border-color: var(--glass-border);">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14 gap-2">
         <div class="flex items-center gap-1.5 flex-shrink-0">
-            <div style="background-color: #2563eb; color: white; width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            <div style="background-color: var(--primary); color: #fff; width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: var(--btn-shadow);">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
             </div>
-            <span class="font-bold text-sm tracking-tight whitespace-nowrap">AI QUANT</span>
+            <span class="font-bold text-sm tracking-tight whitespace-nowrap" style="color: var(--text-main);">AI QUANT</span>
         </div>
-        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
-            <button onclick="runAutoTune()" class="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold hover:bg-purple-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO</button>
-            <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold hover:bg-slate-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
-            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-[10px] font-bold hover:bg-green-200 flex items-center gap-1 whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
+        <div class="flex gap-1.5 overflow-x-auto no-scrollbar items-center">
+            <button onclick="cycleTheme()" class="p-1.5 rounded-lg liquid-btn text-sm" title="Change Theme">🎨</button>
+            <button onclick="runAutoTune()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--secondary);"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO</button>
+            <button onclick="openBacktest()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--text-main);"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
+            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--up-color);"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
       </div>
-      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b border-slate-200 text-[11px] px-1">
+      <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b text-[11px] px-1" style="border-color: var(--glass-border);">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</button>
         <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Positions</button>
         <button class="tab-btn" onclick="switchTab('history', this)"><i data-lucide="history" class="w-3.5 h-3.5"></i> History</button>
@@ -80,70 +169,70 @@ async def dashboard():
   <div class="max-w-md mx-auto px-4 pt-4">
     
     <div id="tab-overview" class="space-y-4">
-        <section class="card p-5 relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-4 opacity-5"><i data-lucide="wallet" class="w-24 h-24"></i></div>
-            <p class="text-slate-500 text-xs font-medium mb-1">Total Balance</p>
+        <section class="liquid-card p-5 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-5"><i data-lucide="wallet" class="w-24 h-24" style="color: var(--primary);"></i></div>
+            <p class="text-xs font-medium mb-1" style="color: var(--text-muted);">Total Balance</p>
             <div class="flex items-end gap-2 relative z-10">
-                <h2 id="total-equity" class="text-3xl font-bold text-slate-900">0.00</h2>
-                <span class="text-slate-500 text-xs mb-1 font-medium">USDT</span>
+                <h2 id="total-equity" class="text-3xl font-bold" style="color: var(--text-main);">0.00</h2>
+                <span class="text-xs mb-1 font-medium" style="color: var(--text-muted);">USDT</span>
             </div>
-            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10">
-                <i data-lucide="minus" class="w-3.5 h-3.5 text-slate-600" id="pnl-icon"></i>
-                <span id="pnl-value" style="color: #64748b;">0.00 USDT</span>
-                <span id="pnl-percent" style="color: #94a3b8;">(0.00%)</span>
+            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border relative z-10" style="background: var(--glass-bg); border-color: var(--glass-border);">
+                <i data-lucide="minus" class="w-3.5 h-3.5" id="pnl-icon" style="color: var(--text-muted);"></i>
+                <span id="pnl-value" style="color: var(--text-muted);">0.00 USDT</span>
+                <span id="pnl-percent" style="color: var(--text-muted);">(0.00%)</span>
             </div>
         </section>
 
         <section class="grid grid-cols-2 gap-3">
-            <div class="card p-3 flex flex-col items-center justify-center">
-                <h3 class="text-[11px] font-semibold text-slate-500 mb-1">Win Rate</h3>
+            <div class="liquid-card p-3 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-semibold mb-1" style="color: var(--text-muted);">Win Rate</h3>
                 <div class="relative w-16 h-16">
                     <canvas id="winrateChart"></canvas>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="winrate" class="text-xs font-bold text-slate-800">0%</span>
+                        <span id="winrate" class="text-xs font-bold" style="color: var(--text-main);">0%</span>
                     </div>
                 </div>
             </div>
-            <div class="card p-3 flex flex-col items-center justify-center">
-                <h3 class="text-[11px] font-semibold text-slate-500 mb-1">Profit Factor</h3>
+            <div class="liquid-card p-3 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-semibold mb-1" style="color: var(--text-muted);">Profit Factor</h3>
                 <div class="relative w-16 h-16">
                     <canvas id="pfChart"></canvas>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="pf" class="text-xs font-bold text-slate-800">0.0</span>
+                        <span id="pf" class="text-xs font-bold" style="color: var(--text-main);">0.0</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="card p-4">
+        <section class="liquid-card p-4">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i> Weekly Performance</h3>
-                <span class="text-[10px] text-slate-400 font-medium">Last 7 Days</span>
+                <h3 class="text-sm font-semibold flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="bar-chart-2" class="w-4 h-4" style="color: var(--primary);"></i> Weekly Performance</h3>
+                <span class="text-[10px] font-medium" style="color: var(--text-muted);">Last 7 Days</span>
             </div>
             <div class="h-32 w-full">
                 <canvas id="weeklyChart"></canvas>
             </div>
             
-            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
+            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t" style="border-color: var(--glass-border);">
                 <div class="text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Trades</p>
-                    <p id="stat-trades" class="text-sm font-bold text-slate-800">0</p>
+                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Trades</p>
+                    <p id="stat-trades" class="text-sm font-bold" style="color: var(--text-main);">0</p>
                 </div>
-                <div class="text-center border-x border-slate-100">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Best Trade</p>
-                    <p id="stat-best" class="text-sm font-bold" style="color: #64748b;">0.00</p>
+                <div class="text-center border-x" style="border-color: var(--glass-border);">
+                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Best Trade</p>
+                    <p id="stat-best" class="text-sm font-bold" style="color: var(--text-muted);">0.00</p>
                 </div>
                 <div class="text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Worst Trade</p>
-                    <p id="stat-worst" class="text-sm font-bold" style="color: #64748b;">0.00</p>
+                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Worst Trade</p>
+                    <p id="stat-worst" class="text-sm font-bold" style="color: var(--text-muted);">0.00</p>
                 </div>
             </div>
         </section>
 
-        <section class="card p-4">
+        <section class="liquid-card p-4">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-sm font-semibold text-slate-800">Market Chart</h3>
-                <select id="chart-symbol" onchange="changeChartSymbol()" class="bg-slate-50 border border-slate-200 text-slate-700 text-[11px] rounded-md px-2 py-1 outline-none font-medium">
+                <h3 class="text-sm font-semibold" style="color: var(--text-main);">Market Chart</h3>
+                <select id="chart-symbol" onchange="changeChartSymbol()" class="border text-[11px] rounded-md px-2 py-1 outline-none font-medium" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
                     <option value="BTCUSDT">BTC/USDT</option>
                     <option value="ETHUSDT">ETH/USDT</option>
                     <option value="SOLUSDT">SOL/USDT</option>
@@ -153,82 +242,86 @@ async def dashboard():
             <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden"></div>
         </section>
 
-        <section class="card p-3 flex items-center justify-between">
+        <section class="liquid-card p-3 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <i data-lucide="bar-chart" class="w-4 h-4 text-slate-400"></i>
-                <span class="text-xs font-semibold text-slate-600">Market Breadth</span>
+                <i data-lucide="bar-chart" class="w-4 h-4" style="color: var(--text-muted);"></i>
+                <span class="text-xs font-semibold" style="color: var(--text-main);">Market Breadth</span>
             </div>
             <div class="flex items-center gap-3 w-1/2">
-                <div class="w-full bg-slate-100 rounded-full h-1.5 flex-1">
-                    <div id="breadth-bar" class="bg-slate-500 h-1.5 rounded-full transition-all duration-500" style="width: 50%"></div>
+                <div class="w-full rounded-full h-1.5 flex-1" style="background: rgba(255,255,255,0.1);">
+                    <div id="breadth-bar" class="h-1.5 rounded-full transition-all duration-500" style="width: 50%; background: var(--text-muted);"></div>
                 </div>
-                <span id="breadth-label" class="text-[10px] font-bold text-slate-800 w-12 text-right">50%</span>
+                <span id="breadth-label" class="text-[10px] font-bold w-12 text-right" style="color: var(--text-main);">50%</span>
             </div>
         </section>
 
-        <section class="card p-4">
-            <h3 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4 text-slate-400"></i> Market Watch</h3>
+        <section class="liquid-card p-4">
+            <h3 class="text-sm font-semibold mb-3 flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="globe" class="w-4 h-4" style="color: var(--text-muted);"></i> Market Watch</h3>
             <div class="h-36 overflow-y-auto custom-scroll pr-1" id="market-watch">
-                <div class="text-center text-slate-400 text-xs py-4">Loading data...</div>
+                <div class="text-center text-xs py-4" style="color: var(--text-muted);">Loading data...</div>
             </div>
         </section>
     </div>
 
     <div id="tab-positions" class="hidden space-y-3">
         <div class="flex justify-between items-center mb-1">
-            <h3 class="text-lg font-bold text-slate-800">Active Positions</h3>
-            <span id="pos-count" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">0 Open</span>
+            <h3 class="text-lg font-bold" style="color: var(--text-main);">Active Positions</h3>
+            <span id="pos-count" class="text-xs font-semibold px-2 py-1 rounded-md" style="background: var(--glass-bg); color: var(--text-muted);">0 Open</span>
         </div>
         <div id="active-positions-list" class="space-y-3"></div>
     </div>
 
     <div id="tab-history" class="hidden space-y-3">
-        <h3 class="text-lg font-bold text-slate-800 mb-1">Trade History</h3>
-        <div class="card overflow-hidden" id="trade-history">
-            <div class="text-center text-slate-400 text-xs py-8">Loading history...</div>
+        <h3 class="text-lg font-bold mb-1" style="color: var(--text-main);">Trade History</h3>
+        <div class="liquid-card overflow-hidden" id="trade-history">
+            <div class="text-center text-xs py-8" style="color: var(--text-muted);">Loading history...</div>
         </div>
     </div>
 
     <div id="tab-logs" class="hidden space-y-3">
-        <h3 class="text-lg font-bold text-slate-800 mb-1">AI Neural Logs</h3>
-        <div class="card p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll bg-slate-900 text-slate-300 rounded-xl" id="neural-logs">
-            <div class="text-slate-500">Waiting for scan cycle...</div>
+        <h3 class="text-lg font-bold mb-1" style="color: var(--text-main);">AI Neural Logs</h3>
+        <div class="liquid-card p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll" style="background: #0f172a; color: #cbd5e1;" id="neural-logs">
+            <div style="color: var(--text-muted);">Waiting for scan cycle...</div>
         </div>
     </div>
 
   </div>
 
-  <!-- Backtest Modal -->
-  <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
-    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i data-lucide="flask-conical" class="w-4 h-4 text-blue-500"></i> Run Backtest</h3>
-        <button onclick="closeBacktest()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-      <div class="space-y-3 mb-5">
-        <select id="bt-symbol" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs outline-none">
-          <option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option>
-        </select>
-        <select id="bt-strat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs outline-none">
-          <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
-        </select>
-      </div>
-      <button onclick="runBacktest()" id="bt-run-btn" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-all flex justify-center items-center gap-2 text-sm">
-        <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation
-      </button>
-      <div id="bt-results" class="mt-3 text-[10px] font-mono whitespace-pre-wrap hidden bg-slate-50 p-2 rounded-lg border border-slate-200 max-h-40 overflow-y-auto custom-scroll"></div>
+  <!-- Backtest Modal (Bulletproof) -->
+  <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50" style="display: none;">
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="liquid-card p-5 w-full max-w-sm shadow-xl">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base font-bold flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="flask-conical" class="w-4 h-4" style="color: var(--primary);"></i> Run Backtest</h3>
+            <button onclick="closeBacktest()" style="color: var(--text-muted);"><i data-lucide="x" class="w-5 h-5"></i></button>
+          </div>
+          <div class="space-y-3 mb-5">
+            <select id="bt-symbol" class="w-full border rounded-lg p-2 text-xs outline-none" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
+              <option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option>
+            </select>
+            <select id="bt-strat" class="w-full border rounded-lg p-2 text-xs outline-none" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
+              <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
+            </select>
+          </div>
+          <button onclick="runBacktest()" id="bt-run-btn" class="w-full font-semibold py-2 rounded-lg transition-all flex justify-center items-center gap-2 text-sm" style="background: var(--primary); color: #fff;">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation
+          </button>
+          <div id="bt-results" class="mt-3 text-[10px] font-mono whitespace-pre-wrap hidden p-2 rounded-lg border max-h-40 overflow-y-auto custom-scroll" style="background: rgba(0,0,0,0.2); border-color: var(--glass-border); color: var(--text-main);"></div>
+        </div>
     </div>
   </div>
 
-  <!-- Custom Confirm Modal -->
-  <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 px-4">
-    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl text-center">
-      <h3 id="confirm-title" class="text-base font-bold text-slate-800 mb-2">تأكيد</h3>
-      <p id="confirm-message" class="text-sm text-slate-600 mb-6">هل أنت متأكد؟</p>
-      <div class="flex gap-3">
-        <button onclick="closeConfirm(false)" class="flex-1 bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg hover:bg-slate-200 transition-all text-sm">إلغاء</button>
-        <button onclick="closeConfirm(true)" class="flex-1 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-all text-sm">حسناً</button>
-      </div>
+  <!-- Confirm Modal (Bulletproof) -->
+  <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50" style="display: none;">
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="liquid-card p-5 w-full max-w-sm shadow-xl text-center">
+          <h3 id="confirm-title" class="text-base font-bold mb-2" style="color: var(--text-main);">تأكيد</h3>
+          <p id="confirm-message" class="text-sm mb-6" style="color: var(--text-muted);">هل أنت متأكد؟</p>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="closeConfirm(false)" class="w-full font-semibold py-2 rounded-lg transition-all text-sm liquid-btn" style="color: var(--text-main);">إلغاء</button>
+            <button onclick="closeConfirm(true)" class="w-full font-semibold py-2 rounded-lg transition-all text-sm" style="background: var(--primary); color: #fff;">حسناً</button>
+          </div>
+        </div>
     </div>
   </div>
 
@@ -248,19 +341,67 @@ const refreshIcons = () => { try { if (window.lucide) window.lucide.createIcons(
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const fmtPrice = (n) => { n = Number(n); if (!isFinite(n)) return '-'; const a = Math.abs(n); if (a >= 1000) return fmt(n); if (a >= 1) return n.toFixed(4); return n.toPrecision(4); };
 
-const COLOR_GREEN = '#10b981';
-const COLOR_RED = '#ef4444';
-const COLOR_NEUTRAL = '#64748b';
+// --- Theme Logic ---
+const themes = ['theme-cyber', 'theme-matrix', 'theme-gold', 'theme-neumorphism', 'theme-light'];
+let currentThemeIndex = parseInt(localStorage.getItem('themeIndex') || '0');
 
-refreshIcons();
+function applyTheme(index) {
+    document.body.className = document.body.className.replace(/theme-\w+/g, '').trim();
+    document.body.classList.add(themes[index]);
+    localStorage.setItem('themeIndex', index);
+    
+    // Update Chart Colors dynamically
+    if (tvChart && candleSeries) {
+        const styles = getComputedStyle(document.body);
+        const upColor = styles.getPropertyValue('--up-color').trim();
+        const downColor = styles.getPropertyValue('--down-color').trim();
+        const isLight = themes[index] === 'theme-light';
+        
+        candleSeries.applyOptions({
+            upColor: upColor,
+            downColor: downColor,
+            wickUpColor: upColor,
+            wickDownColor: downColor
+        });
+        
+        tvChart.applyOptions({
+            layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#374151' : '#64748b' },
+            grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.02)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.02)' } }
+        });
+        
+        // إعادة رسم الخطوط والأسهم لتتطابق مع اللون الجديد
+        drawPositionOverlays(); 
+    }
+    
+    // Update Charts (Donut & Bar) colors
+    if(winrateChart) {
+        winrateChart.data.datasets[0].backgroundColor[0] = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+        winrateChart.update();
+    }
+    if(weeklyChart) {
+        const data = weeklyChart.data.datasets[0].data;
+        weeklyChart.data.datasets[0].backgroundColor = data.map(v => v > 0 ? getComputedStyle(document.body).getPropertyValue('--up-color').trim() : (v < 0 ? getComputedStyle(document.body).getPropertyValue('--down-color').trim() : '#cbd5e1'));
+        weeklyChart.update();
+    }
+}
+
+function cycleTheme() {
+    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+    applyTheme(currentThemeIndex);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(currentThemeIndex);
+});
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-slate-800';
+    const bgColor = type === 'success' ? 'var(--up-color)' : type === 'error' ? 'var(--down-color)' : 'var(--text-main)';
     const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
     
-    toast.className = `toast ${bgColor} text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto text-xs font-medium`;
+    toast.className = `toast text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto text-xs font-medium`;
+    toast.style.backgroundColor = bgColor;
     toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${message}</span>`;
     container.appendChild(toast);
     refreshIcons();
@@ -277,13 +418,11 @@ function showConfirm(title, message, callback) {
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-message').textContent = message;
     confirmCallback = callback;
-    document.getElementById('confirm-modal').classList.remove('hidden');
-    document.getElementById('confirm-modal').classList.add('flex');
+    document.getElementById('confirm-modal').style.display = 'block';
 }
 
 function closeConfirm(isConfirmed) {
-    document.getElementById('confirm-modal').classList.add('hidden');
-    document.getElementById('confirm-modal').classList.remove('flex');
+    document.getElementById('confirm-modal').style.display = 'none';
     if (isConfirmed && confirmCallback) {
         confirmCallback();
     }
@@ -324,10 +463,10 @@ async function togglePause() {
 function updatePauseButton(isPaused) {
     const btn = document.getElementById('pause-btn');
     if (isPaused) {
-        btn.className = "px-2.5 py-1.5 bg-red-100 text-red-700 rounded-lg text-[10px] font-bold hover:bg-red-200 flex items-center gap-1 whitespace-nowrap";
+        btn.style.color = 'var(--down-color)';
         btn.innerHTML = '<i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> PAUSED';
     } else {
-        btn.className = "px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-[10px] font-bold hover:bg-green-200 flex items-center gap-1 whitespace-nowrap";
+        btn.style.color = 'var(--up-color)';
         btn.innerHTML = '<i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE';
     }
     refreshIcons();
@@ -362,8 +501,8 @@ function runAutoTune() {
     });
 }
 
-function openBacktest() { document.getElementById('backtest-modal').classList.remove('hidden'); document.getElementById('backtest-modal').classList.add('flex'); }
-function closeBacktest() { document.getElementById('backtest-modal').classList.add('hidden'); document.getElementById('backtest-modal').classList.remove('flex'); }
+function openBacktest() { document.getElementById('backtest-modal').style.display = 'block'; }
+function closeBacktest() { document.getElementById('backtest-modal').style.display = 'none'; }
 
 async function runBacktest() {
     const symbol = document.getElementById('bt-symbol').value;
@@ -391,19 +530,23 @@ function initTVChart() {
     const chartElement = document.getElementById('tvchart');
     if(!chartElement) return;
     const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
+    const isLight = document.body.classList.contains('theme-light');
     
     tvChart = LightweightCharts.createChart(chartElement, {
         width: width, height: 192,
-        layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#64748b' },
-        grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+        layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#374151' : '#64748b' },
+        grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255, 255, 255, 0.02)' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: { borderVisible: false },
         timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
     });
     
     candleSeries = tvChart.addCandlestickSeries({
-        upColor: COLOR_GREEN, downColor: COLOR_RED,
-        borderVisible: false, wickUpColor: COLOR_GREEN, wickDownColor: COLOR_RED,
+        upColor: getComputedStyle(document.body).getPropertyValue('--up-color').trim(), 
+        downColor: getComputedStyle(document.body).getPropertyValue('--down-color').trim(),
+        borderVisible: false, 
+        wickUpColor: getComputedStyle(document.body).getPropertyValue('--up-color').trim(), 
+        wickDownColor: getComputedStyle(document.body).getPropertyValue('--down-color').trim(),
     });
     
     window.addEventListener('resize', () => { tvChart.applyOptions({ width: chartElement.clientWidth }); });
@@ -419,17 +562,20 @@ function initTVChart() {
 }
 
 function initCharts() {
+    const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+    const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
+
     const ctxWin = document.getElementById('winrateChart').getContext('2d');
     winrateChart = new Chart(ctxWin, {
         type: 'doughnut',
-        data: { datasets: [{ data: [0, 100], backgroundColor: [COLOR_GREEN, '#f1f5f9'], borderWidth: 0, cutout: '80%' }] },
+        data: { datasets: [{ data: [0, 100], backgroundColor: [upColor, 'rgba(255,255,255,0.1)'], borderWidth: 0, cutout: '80%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
     });
 
     const ctxPf = document.getElementById('pfChart').getContext('2d');
     pfChart = new Chart(ctxPf, {
         type: 'doughnut',
-        data: { datasets: [{ data: [0, 100], backgroundColor: ['#8b5cf6', '#f1f5f9'], borderWidth: 0, cutout: '80%' }] },
+        data: { datasets: [{ data: [0, 100], backgroundColor: ['#8b5cf6', 'rgba(255,255,255,0.1)'], borderWidth: 0, cutout: '80%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
     });
 
@@ -441,7 +587,7 @@ function initCharts() {
             datasets: [{
                 label: 'PnL (USDT)',
                 data: [0, 0, 0, 0, 0, 0, 0],
-                backgroundColor: '#cbd5e1',
+                backgroundColor: 'rgba(255,255,255,0.1)',
                 borderRadius: 4,
                 barPercentage: 0.6
             }]
@@ -450,7 +596,7 @@ function initCharts() {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw > 0 ? '+' : ''}${fmt(ctx.raw)} USDT` } } },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, color: 'var(--text-muted)' } },
                 y: { display: false, grace: '15%' } 
             }
         }
@@ -464,17 +610,17 @@ async function loadLiveTickers() {
         if(data.length > 0) {
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
-                let textColor = COLOR_NEUTRAL;
-                let bgColor = 'bg-slate-50';
+                let textColor = 'var(--text-muted)';
+                let bgColor = 'transparent';
                 let sign = '';
-                if (d.change > 0) { textColor = COLOR_GREEN; bgColor = 'bg-green-50'; sign = '+'; }
-                else if (d.change < 0) { textColor = COLOR_RED; bgColor = 'bg-red-50'; }
+                if (d.change > 0) { textColor = 'var(--up-color)'; sign = '+'; }
+                else if (d.change < 0) { textColor = 'var(--down-color)'; }
 
                 return `
-                <div class="flex justify-between items-center p-1.5 rounded-md ${bgColor} mb-1">
-                    <span class="font-bold text-slate-800 text-[11px]">${d.symbol}</span>
+                <div class="flex justify-between items-center p-1.5 rounded-md mb-1" style="background: rgba(255,255,255,0.03);">
+                    <span class="font-bold text-[11px]" style="color: var(--text-main);">${d.symbol}</span>
                     <div class="text-right">
-                        <div class="text-slate-900 text-[11px] font-mono font-semibold">$${fmtPrice(d.price)}</div>
+                        <div class="text-[11px] font-mono font-semibold" style="color: var(--text-main);">$${fmtPrice(d.price)}</div>
                         <div class="text-[9px] font-bold" style="color: ${textColor};">${sign}${d.change}%</div>
                     </div>
                 </div>`;
@@ -488,16 +634,20 @@ function drawPositionOverlays() {
     priceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch (e) {} });
     priceLines = [];
     const markers = [];
+    
+    const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+    const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
+    
     currentPositions.filter(p => p.symbol === currentSymbol).forEach(pos => {
         const entryTime = Math.floor(new Date(pos.opened_at).getTime() / 1000);
         markers.push({
             time: entryTime, position: pos.side === 'LONG' ? 'belowBar' : 'aboveBar',
-            color: pos.side === 'LONG' ? COLOR_GREEN : COLOR_RED,
+            color: pos.side === 'LONG' ? upColor : downColor,
             shape: pos.side === 'LONG' ? 'arrowUp' : 'arrowDown', text: pos.side
         });
         priceLines.push(candleSeries.createPriceLine({ price: Number(pos.entry_price), color: '#3b82f6', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'ENTRY' }));
-        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.stop_price), color: COLOR_RED, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' }));
-        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.target_price), color: COLOR_GREEN, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' }));
+        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.stop_price), color: downColor, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'STOP' }));
+        priceLines.push(candleSeries.createPriceLine({ price: Number(pos.target_price), color: upColor, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TARGET' }));
     });
     markers.sort((a, b) => a.time - b.time);
     candleSeries.setMarkers(markers);
@@ -541,7 +691,10 @@ function updateWeeklyStats(trades) {
 
     const labels = days.map(d => d.label);
     const data = days.map(d => d.pnl);
-    const bgColors = data.map(v => v > 0 ? COLOR_GREEN : (v < 0 ? COLOR_RED : '#cbd5e1'));
+    
+    const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+    const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
+    const bgColors = data.map(v => v > 0 ? upColor : (v < 0 ? downColor : 'rgba(255,255,255,0.1)'));
     
     if(weeklyChart) {
         weeklyChart.data.labels = labels;
@@ -558,19 +711,19 @@ function updateWeeklyStats(trades) {
     
     const bestEl = document.getElementById('stat-best');
     if (bestTrade > 0) {
-        bestEl.style.color = COLOR_GREEN;
+        bestEl.style.color = upColor;
         bestEl.textContent = `+${fmt(bestTrade)}`;
     } else {
-        bestEl.style.color = COLOR_NEUTRAL;
+        bestEl.style.color = 'var(--text-muted)';
         bestEl.textContent = `0.00`;
     }
 
     const worstEl = document.getElementById('stat-worst');
     if (worstTrade < 0) {
-        worstEl.style.color = COLOR_RED;
+        worstEl.style.color = downColor;
         worstEl.textContent = `${fmt(worstTrade)}`;
     } else {
-        worstEl.style.color = COLOR_NEUTRAL;
+        worstEl.style.color = 'var(--text-muted)';
         worstEl.textContent = `0.00`;
     }
 }
@@ -611,33 +764,34 @@ async function load(){
   const pnlValueEl = document.getElementById('pnl-value');
   const pnlPercentEl = document.getElementById('pnl-percent');
   
+  const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+  const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
+  const neutralColor = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
+  
   if (pnlVal > 0) {
       pnlValueEl.textContent = `+${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(+${pnlPercent.toFixed(2)}%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 border border-green-200 relative z-10";
-      pnlValueEl.style.color = COLOR_GREEN;
-      pnlPercentEl.style.color = COLOR_GREEN;
+      pnlValueEl.style.color = upColor;
+      pnlPercentEl.style.color = upColor;
       pnlIcon.setAttribute('data-lucide', 'trending-up');
       pnlIcon.className = "w-3.5 h-3.5";
-      pnlIcon.style.color = COLOR_GREEN;
+      pnlIcon.style.color = upColor;
   } else if (pnlVal < 0) {
       pnlValueEl.textContent = `${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(${pnlPercent.toFixed(2)}%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 border border-red-200 relative z-10";
-      pnlValueEl.style.color = COLOR_RED;
-      pnlPercentEl.style.color = COLOR_RED;
+      pnlValueEl.style.color = downColor;
+      pnlPercentEl.style.color = downColor;
       pnlIcon.setAttribute('data-lucide', 'trending-down');
       pnlIcon.className = "w-3.5 h-3.5";
-      pnlIcon.style.color = COLOR_RED;
+      pnlIcon.style.color = downColor;
   } else {
       pnlValueEl.textContent = `0.00 USDT`;
       pnlPercentEl.textContent = `(0.00%)`;
-      pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10";
-      pnlValueEl.style.color = COLOR_NEUTRAL;
-      pnlPercentEl.style.color = COLOR_NEUTRAL;
+      pnlValueEl.style.color = neutralColor;
+      pnlPercentEl.style.color = neutralColor;
       pnlIcon.setAttribute('data-lucide', 'minus');
       pnlIcon.className = "w-3.5 h-3.5";
-      pnlIcon.style.color = COLOR_NEUTRAL;
+      pnlIcon.style.color = neutralColor;
   }
   refreshIcons();
 
@@ -647,9 +801,9 @@ async function load(){
   const breadthBar = document.getElementById('breadth-bar');
   const breadthLabel = document.getElementById('breadth-label');
   breadthBar.style.width = `${breadth}%`;
-  if(breadth > 60) { breadthBar.className = 'bg-green-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bullish'; breadthLabel.style.color = COLOR_GREEN; }
-  else if(breadth < 40) { breadthBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Bearish'; breadthLabel.style.color = COLOR_RED; }
-  else { breadthBar.className = 'bg-blue-500 h-1.5 rounded-full transition-all duration-500'; breadthLabel.textContent = 'Neutral'; breadthLabel.style.color = '#3b82f6'; }
+  if(breadth > 60) { breadthBar.style.backgroundColor = upColor; breadthLabel.textContent = 'Bullish'; breadthLabel.style.color = upColor; }
+  else if(breadth < 40) { breadthBar.style.backgroundColor = downColor; breadthLabel.textContent = 'Bearish'; breadthLabel.style.color = downColor; }
+  else { breadthBar.style.backgroundColor = '#3b82f6'; breadthLabel.textContent = 'Neutral'; breadthLabel.style.color = '#3b82f6'; }
 
   let wr = perf.win_rate || 0;
   document.getElementById('winrate').textContent = wr.toFixed(0) + '%';
@@ -666,7 +820,7 @@ async function load(){
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
   if(ps.length === 0) {
-    posContainer.innerHTML = '<div class="text-center text-slate-400 text-sm py-8 card">No active positions</div>';
+    posContainer.innerHTML = '<div class="text-center text-sm py-8 liquid-card" style="color: var(--text-muted);">No active positions</div>';
   } else {
     posContainer.innerHTML = ps.map(pos => {
         const currentPrice = Number(pos.current_price || pos.entry_price);
@@ -675,35 +829,34 @@ async function load(){
         const sideMultiplier = pos.side === 'LONG' ? 1 : -1;
         const unrealizedPnl = (currentPrice - entryPrice) * qty * sideMultiplier;
         
-        let pnlColorStyle = `color: ${COLOR_NEUTRAL};`;
-        let pnlBg = 'bg-slate-100';
+        let pnlColor = neutralColor;
         let pnlSign = '';
-        if (unrealizedPnl > 0) { pnlColorStyle = `color: ${COLOR_GREEN};`; pnlBg = 'bg-green-50'; pnlSign = '+'; }
-        else if (unrealizedPnl < 0) { pnlColorStyle = `color: ${COLOR_RED};`; pnlBg = 'bg-red-50'; }
+        if (unrealizedPnl > 0) { pnlColor = upColor; pnlSign = '+'; }
+        else if (unrealizedPnl < 0) { pnlColor = downColor; }
 
         return `
-      <div class="card p-3 border-l-4 ${pos.side === 'LONG' ? 'border-l-green-500' : 'border-l-red-500'}">
+      <div class="liquid-card p-3 border-l-4" style="border-left-color: ${pos.side === 'LONG' ? upColor : downColor};">
         <div class="flex justify-between items-start mb-2">
           <div>
-              <h4 class="font-bold text-slate-900 text-base">${pos.symbol}</h4>
+              <h4 class="font-bold text-base" style="color: var(--text-main);">${pos.symbol}</h4>
               <div class="flex gap-2 items-center mt-1">
-                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">${pos.side}</span>
-                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${pnlBg}" style="${pnlColorStyle}">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="background: rgba(255,255,255,0.1); color: var(--text-main);">${pos.side}</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
               </div>
           </div>
           <div class="text-right">
-            <p class="text-[9px] text-slate-400 uppercase">Entry</p>
-            <p class="font-mono text-xs font-semibold text-slate-800">${fmtPrice(entryPrice)}</p>
-            <p class="text-[9px] text-slate-400 uppercase mt-0.5">Current</p>
-            <p class="font-mono text-[11px] font-semibold text-slate-600">${fmtPrice(currentPrice)}</p>
+            <p class="text-[9px] uppercase" style="color: var(--text-muted);">Entry</p>
+            <p class="font-mono text-xs font-semibold" style="color: var(--text-main);">${fmtPrice(entryPrice)}</p>
+            <p class="text-[9px] uppercase mt-0.5" style="color: var(--text-muted);">Current</p>
+            <p class="font-mono text-[11px] font-semibold" style="color: var(--text-muted);">${fmtPrice(currentPrice)}</p>
           </div>
         </div>
-        <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+        <div class="flex justify-between items-center pt-2 border-t" style="border-color: var(--glass-border);">
            <div class="flex gap-3">
-               <div><p class="text-[9px] text-slate-400 uppercase">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_GREEN};">${fmtPrice(pos.target_price)}</p></div>
-               <div><p class="text-[9px] text-slate-400 uppercase">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${COLOR_RED};">${fmtPrice(pos.stop_price)}</p></div>
+               <div><p class="text-[9px] uppercase" style="color: var(--text-muted);">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${upColor};">${fmtPrice(pos.target_price)}</p></div>
+               <div><p class="text-[9px] uppercase" style="color: var(--text-muted);">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${downColor};">${fmtPrice(pos.stop_price)}</p></div>
            </div>
-           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold border px-2.5 py-1 rounded-md hover:bg-red-50 transition-colors" style="color: ${COLOR_RED}; border-color: ${COLOR_RED}40;">CLOSE</button>
+           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold border px-2.5 py-1 rounded-md transition-colors liquid-btn" style="color: ${downColor}; border-color: ${downColor}40;">CLOSE</button>
         </div>
       </div>
     `}).join('');
@@ -712,23 +865,23 @@ async function load(){
   const histContainer = document.getElementById('trade-history');
   const closedTrades = trades.filter(t => t.status === 'CLOSED').slice(0, 10);
   if(closedTrades.length === 0) {
-      histContainer.innerHTML = '<div class="text-center text-slate-400 text-xs py-8">No recent trades</div>';
+      histContainer.innerHTML = '<div class="text-center text-xs py-8" style="color: var(--text-muted);">No recent trades</div>';
   } else {
-      let html = `<table class="w-full text-left text-xs text-slate-600">
-        <thead class="bg-slate-50 text-[10px] uppercase text-slate-400 border-b border-slate-200">
+      let html = `<table class="w-full text-left text-xs" style="color: var(--text-muted);">
+        <thead class="text-[10px] uppercase border-b" style="background: rgba(255,255,255,0.02); border-color: var(--glass-border);">
           <tr><th class="p-2">Asset</th><th class="p-2">Side</th><th class="p-2 text-right">Entry</th><th class="p-2 text-right">Net PnL</th></tr>
         </thead><tbody>`;
       closedTrades.forEach(t => {
-          let pnlColorStyle = `color: ${COLOR_NEUTRAL};`;
+          let pnlColor = neutralColor;
           let pnlSign = '';
-          if (t.net_pnl > 0) { pnlColorStyle = `color: ${COLOR_GREEN};`; pnlSign = '+'; }
-          else if (t.net_pnl < 0) { pnlColorStyle = `color: ${COLOR_RED};`; }
+          if (t.net_pnl > 0) { pnlColor = upColor; pnlSign = '+'; }
+          else if (t.net_pnl < 0) { pnlColor = downColor; }
 
-          html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td class="p-2 font-bold text-slate-800 text-[11px]">${t.symbol}</td>
-              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.side === 'LONG' ? 'bg-green-100' : 'bg-red-100'}" style="${pnlColorStyle}">${t.side}</span></td>
+          html += `<tr class="border-b hover:bg-white/5 transition-colors" style="border-color: var(--glass-border);">
+              <td class="p-2 font-bold text-[11px]" style="color: var(--text-main);">${t.symbol}</td>
+              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${t.side}</span></td>
               <td class="p-2 text-right font-mono text-[11px]">${fmtPrice(t.entry_price)}</td>
-              <td class="p-2 text-right font-mono font-bold text-[11px]" style="${pnlColorStyle}">${pnlSign}${fmt(t.net_pnl)}</td>
+              <td class="p-2 text-right font-mono font-bold text-[11px]" style="color: ${pnlColor};">${pnlSign}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
       html += '</tbody></table>';
@@ -737,12 +890,12 @@ async function load(){
 
   const logContainer = document.getElementById('neural-logs');
   if(decisions.length === 0) {
-    logContainer.innerHTML = '<div class="text-slate-500">No scans yet...</div>';
+    logContainer.innerHTML = '<div style="color: var(--text-muted);">No scans yet...</div>';
   } else {
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        let colorStyle = (d.action.includes('BUY') || d.action.includes('LONG')) ? `color: ${COLOR_GREEN};` : (d.action.includes('SHORT') || d.action.includes('SELL')) ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
-        return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
+        let colorStyle = (d.action.includes('BUY') || d.action.includes('LONG')) ? `color: ${upColor};` : (d.action.includes('SHORT') || d.action.includes('SELL')) ? `color: ${downColor};` : `color: #94a3b8;`;
+        return `<div class="mb-1 flex gap-2 text-[10px]"><span style="color: var(--text-muted); shrink-0">[${time}]</span> <span class="font-semibold shrink-0" style="color: var(--text-main);">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="truncate" style="color: var(--text-muted);">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
     }).join('');
   }
 
@@ -750,6 +903,7 @@ async function load(){
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(currentThemeIndex);
     setTimeout(() => { try { if (window.LightweightCharts) initTVChart(); } catch (e) { console.error(e); } try { if (window.Chart) initCharts(); } catch (e) { console.error(e); } }, 200);
     loadLiveTickers();
     load(); 
