@@ -26,6 +26,7 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
+# --- القائمة النخبة: أفضل 50 عملة ---
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
@@ -50,12 +51,15 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
-CORRELATION_MAX = 0.92   
-PAIR_LOCK_AFTER_STOPLOSS_MIN = 120   
-USE_BTC_COMPASS = True     
-USE_ROLLING_VWAP = True    
-STRICT_HTF_CONFIRM = False 
-MAX_SAME_SIDE = 3        
+
+# --- إعدادات الحماية والارتباط (الخلطة المثالية) ---
+CORRELATION_MAX = float(os.getenv("CORRELATION_MAX", "0.85")) # 0.85 هي العتبة الذهبية
+PAIR_LOCK_AFTER_STOPLOSS_MIN = int(os.getenv("PAIR_LOCK_AFTER_STOPLOSS_MIN", "120"))
+USE_BTC_COMPASS = os.getenv("USE_BTC_COMPASS", "true").lower() == "true"
+USE_ROLLING_VWAP = os.getenv("USE_ROLLING_VWAP", "true").lower() == "true"
+STRICT_HTF_CONFIRM = os.getenv("STRICT_HTF_CONFIRM", "false").lower() == "true"
+MAX_SAME_SIDE = int(os.getenv("MAX_SAME_SIDE", "3"))
+
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
@@ -70,8 +74,8 @@ RANGE_ADX_MAX = 20
 # Trade management
 TRAILING_ENABLED = os.getenv("TRAILING_ENABLED", "true").lower() == "true"
 BREAKEVEN_AT_R = 1.0
-TRAIL_START_R = 1.5
-TRAIL_DISTANCE_R = 1.0
+TRAIL_START_R = 2.0
+TRAIL_DISTANCE_R = 0.8
 
 # Portfolio protection
 MAX_CONSECUTIVE_LOSSES = 4
@@ -86,16 +90,20 @@ BACKTEST_INTERVAL = "1h"
 # Dashboard protection (empty = open)
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
+# --- الوضع الهجومي (10% Heat) ---
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = 2.0     
-MAX_PORTFOLIO_RISK_PCT = 10.0
-MAX_ALLOCATION_PCT = 100.0    
-DAILY_LOSS_LIMIT_PCT = 3.0
+RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "2.0"))     
+MAX_PORTFOLIO_RISK_PCT = float(os.getenv("MAX_PORTFOLIO_RISK_PCT", "10.0"))
+MAX_ALLOCATION_PCT = float(os.getenv("MAX_ALLOCATION_PCT", "100.0"))    
+DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "3.0"))
+
+MAX_DIRECTIONAL_HEAT_PCT = float(os.getenv("MAX_DIRECTIONAL_HEAT_PCT", "10.0"))
+MAX_TOTAL_HEAT_PCT = float(os.getenv("MAX_TOTAL_HEAT_PCT", "20.0"))
 
 # Fees & Notional
 FEE_RATE = 0.0004            
 FEE_RATE_SPOT = 0.001        
-MIN_NOTIONAL_USDT = 10.0     # <--- أضفنا هذا السطر هنا
+MIN_NOTIONAL_USDT = 10.0     
 
 def fee_rate(source):
     return FEE_RATE if source == "futures" else FEE_RATE_SPOT
@@ -122,16 +130,16 @@ USER_AGENT = "AI-QUANT-X-Paper/4.1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # --- Advanced Filters ---
-USE_FUNDING_RATE_FILTER = True
+USE_FUNDING_RATE_FILTER = os.getenv("USE_FUNDING_RATE_FILTER", "true").lower() == "true"
 MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
 
-USE_SESSION_FILTER = False
+USE_SESSION_FILTER = os.getenv("USE_SESSION_FILTER", "false").lower() == "true"
 LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
-SCALE_OUT_ENABLED = True
+SCALE_OUT_ENABLED = os.getenv("SCALE_OUT_ENABLED", "true").lower() == "true"
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
