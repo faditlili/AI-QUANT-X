@@ -2,17 +2,13 @@
 import config
 
 def next_stop(side, entry, initial_stop, stop, price, trailing=None, fee=None):
-    if trailing is None:
-        trailing = config.TRAILING_ENABLED
-    if fee is None:
-        fee = config.FEE_RATE
-    if not trailing:
-        return stop
+    if trailing is None: trailing = config.TRAILING_ENABLED
+    if fee is None: fee = config.FEE_RATE
+    if not trailing: return stop
         
     initial = initial_stop or stop
     r = abs(entry - initial)
-    if r <= 0:
-        return stop
+    if r <= 0: return stop
         
     sign = 1 if side == "LONG" else -1
     gain_r = (price - entry) * sign / r
