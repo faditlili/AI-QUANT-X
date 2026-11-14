@@ -58,6 +58,23 @@ STRICT_HTF_CONFIRM = os.getenv("STRICT_HTF_CONFIRM", "false").lower() == "true"
 MAX_SAME_SIDE = int(os.getenv("MAX_SAME_SIDE", "3"))
 
 MIN_SIGNAL_SCORE = 50
+
+# --- Soft filters: each failed soft filter costs points instead of vetoing the trade ---
+SOFT_FILTER_PENALTY = int(os.getenv("SOFT_FILTER_PENALTY", "10"))
+MAX_SOFT_FILTER_FAILS = int(os.getenv("MAX_SOFT_FILTER_FAILS", "2"))
+HIGH_VOL_MIN_SCORE = int(os.getenv("HIGH_VOL_MIN_SCORE", "65"))
+COUNTER_TREND_MIN_SCORE = int(os.getenv("COUNTER_TREND_MIN_SCORE", "65"))
+TAKER_LONG_MIN = 0.45
+TAKER_SHORT_MAX = 0.55
+FEAR_GREED_MAX_LONG = 80
+FEAR_GREED_MIN_SHORT = 20
+BREADTH_MIN_LONG = 30.0
+BREADTH_MAX_SHORT = 70.0
+
+# --- Auto-Tune quality gate ---
+AUTOTUNE_MIN_TRADES = int(os.getenv("AUTOTUNE_MIN_TRADES", "8"))
+AUTOTUNE_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_MIN_PROFIT_FACTOR", "1.1"))
+AUTOTUNE_MAX_DRAWDOWN_PCT = float(os.getenv("AUTOTUNE_MAX_DRAWDOWN_PCT", "20.0"))
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
