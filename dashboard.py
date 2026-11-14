@@ -1,9 +1,10 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition with Forced PnL Colors."""
+"""Ultimate FastAPI Dashboard - Final Perfected Edition with Auto-Tune."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
 from backtest import run_backtest, format_report
 import config
+from optimizer import run_auto_tune
 
 router=APIRouter()
 _bt_running=False
@@ -61,6 +62,7 @@ async def dashboard():
             <span class="font-bold text-base tracking-tight">AI QUANT</span>
         </div>
         <div class="flex gap-2">
+            <button onclick="runAutoTune()" class="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-semibold hover:bg-purple-200 flex items-center gap-1"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO-TUNE</button>
             <button onclick="openBacktest()" class="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 flex items-center gap-1"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
             <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
         </div>
@@ -228,10 +230,8 @@ let priceLines = [];
 let overlaySig = '';
 const refreshIcons = () => { try { if (window.lucide) window.lucide.createIcons(); } catch (e) {} };
 const fmt = (n) => Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-// سعر بدقة مناسبة لحجمه (يعرض أيضاً العملات الصغيرة مثل SHIB بدل 0.0000)
 const fmtPrice = (n) => { n = Number(n); if (!isFinite(n)) return '-'; const a = Math.abs(n); if (a >= 1000) return fmt(n); if (a >= 1) return n.toFixed(4); return n.toPrecision(4); };
 
-// الألوان الصارمة
 const COLOR_GREEN = '#10b981';
 const COLOR_RED = '#ef4444';
 const COLOR_NEUTRAL = '#64748b';
@@ -309,6 +309,23 @@ async function closePosition(id, symbol) {
         else showToast('Error: ' + (data.error || 'close failed'), 'error');
     } catch (e) { showToast('Failed to close position', 'error'); }
     load();
+}
+
+async function runAutoTune() {
+    if(!confirm('هل تريد تشغيل الضبط التلقائي؟ سيختبر البوت أفضل الإعدادات ويطبقها على نفسه.')) return;
+    showToast('Auto-Tuning in progress... (Please wait)', 'info');
+    
+    try {
+        const res = await fetch('/api/auto_tune?symbol=BTCUSDT&strategy=trend', { method: 'POST' });
+        const data = await res.json();
+        if(data.success) {
+            showToast(`Done! Best: RSI ${data.best_params.RSI} & EMA ${data.best_params.EMA} (${data.return_pct.toFixed(1)}%)`, 'success');
+        } else {
+            showToast("Error: " + data.error, 'error');
+        }
+    } catch(e) {
+        showToast("Failed to auto-tune", 'error');
+    }
 }
 
 function openBacktest() { document.getElementById('backtest-modal').classList.remove('hidden'); document.getElementById('backtest-modal').classList.add('flex'); }
@@ -457,7 +474,6 @@ async function loadChartData(symbol) {
         if(data && data.length > 0) {
             candleSeries.setData(data);
             tvChart.timeScale().fitContent();
-            
             drawPositionOverlays();
         }
     } catch(e) {}
@@ -504,7 +520,6 @@ function updateWeeklyStats(trades) {
 
     document.getElementById('stat-trades').textContent = totalTrades;
     
-    // تطبيق اللون الأخضر أو الأحمر أو الرمادي بشكل صارم (Inline CSS)
     const bestEl = document.getElementById('stat-best');
     if (bestTrade > 0) {
         bestEl.style.color = COLOR_GREEN;
@@ -560,15 +575,12 @@ async function load(){
   const pnlValueEl = document.getElementById('pnl-value');
   const pnlPercentEl = document.getElementById('pnl-percent');
   
-  // إجبار الألوان باستخدام Inline Styles
   if (pnlVal > 0) {
       pnlValueEl.textContent = `+${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(+${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 border border-green-200 relative z-10";
-      
       pnlValueEl.style.color = COLOR_GREEN;
       pnlPercentEl.style.color = COLOR_GREEN;
-      
       pnlIcon.setAttribute('data-lucide', 'trending-up');
       pnlIcon.className = "w-3.5 h-3.5";
       pnlIcon.style.color = COLOR_GREEN;
@@ -576,10 +588,8 @@ async function load(){
       pnlValueEl.textContent = `${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(${pnlPercent.toFixed(2)}%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 border border-red-200 relative z-10";
-      
       pnlValueEl.style.color = COLOR_RED;
       pnlPercentEl.style.color = COLOR_RED;
-      
       pnlIcon.setAttribute('data-lucide', 'trending-down');
       pnlIcon.className = "w-3.5 h-3.5";
       pnlIcon.style.color = COLOR_RED;
@@ -587,10 +597,8 @@ async function load(){
       pnlValueEl.textContent = `0.00 USDT`;
       pnlPercentEl.textContent = `(0.00%)`;
       pnlDisplay.className = "mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 border border-slate-200 relative z-10";
-      
       pnlValueEl.style.color = COLOR_NEUTRAL;
       pnlPercentEl.style.color = COLOR_NEUTRAL;
-      
       pnlIcon.setAttribute('data-lucide', 'minus');
       pnlIcon.className = "w-3.5 h-3.5";
       pnlIcon.style.color = COLOR_NEUTRAL;
@@ -697,7 +705,6 @@ async function load(){
   } else {
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        // إصلاح الألوان هنا: BUY و LONG خضراء، SHORT حمراء
         let colorStyle = (d.action.includes('BUY') || d.action.includes('LONG')) ? `color: ${COLOR_GREEN};` : (d.action.includes('SHORT') || d.action.includes('SELL')) ? `color: ${COLOR_RED};` : `color: #94a3b8;`;
         return `<div class="mb-1 flex gap-2 text-[10px]"><span class="text-slate-600 shrink-0">[${time}]</span> <span class="text-white font-semibold shrink-0">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="text-slate-500 truncate">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
     }).join('');
@@ -838,3 +845,14 @@ async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: 
         return {"success": False, "error": str(e)}
     finally:
         _bt_running = False
+
+@router.post("/api/auto_tune")
+async def api_auto_tune(request: Request, symbol: str = "BTCUSDT", strategy: str = "trend"):
+    try:
+        engine = request.app.state.engine
+        db = request.app.state.db
+        market = engine.market
+        result = await run_auto_tune(db, market, symbol, strategy)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
