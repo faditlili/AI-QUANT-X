@@ -31,7 +31,7 @@ async def run_auto_tune(db, market, symbol="BTCUSDT"):
                         win_rate = report.get("win_rate", 0)
                         trades = report.get("trades", 0)
                         
-                        if trades < 5:
+                        if trades < 1:
                             continue
                             
                         score = ret + (pf * 10) + (win_rate / 2)
