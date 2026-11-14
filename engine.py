@@ -26,11 +26,18 @@ class Engine:
         await self.market.start()
         await self.news.start()
         
-        # تحميل إعدادات Auto-Tune
+        # --- تحميل الإعدادات والاستراتيجية الأفضل ---
         saved_rsi = self.db.get_state("auto_rsi")
         saved_ema = self.db.get_state("auto_ema")
+        saved_strategy = self.db.get_state("auto_strategy")
+        
         if saved_rsi: config.RSI_PERIOD = int(saved_rsi)
         if saved_ema: config.EMA_FAST = int(saved_ema)
+        
+        if saved_strategy:
+            config.STRATEGIES = (saved_strategy,)
+            log.info(f"Auto-Tune Active: Using strategy '{saved_strategy}' with RSI {saved_rsi} & EMA {saved_ema}")
+        # ---------------------------------------------
         
         self.running=True
         if self.task is None or self.task.done(): self.task=asyncio.create_task(self._run())
