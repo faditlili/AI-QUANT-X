@@ -1,4 +1,4 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition with Theme Switcher."""
+"""The Ultimate AI QUANT X Dashboard - Flawless Themes & UI."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
@@ -16,14 +16,13 @@ async def dashboard():
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>AI QUANT X · Pro Dashboard</title>
+  <title>AI QUANT X · Ultimate UI</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <script>
-    // ربط ألوان Tailwind بمتغيرات CSS لكي تتغير ديناميكياً
     tailwind.config = {
       darkMode: 'class',
       theme: { 
@@ -31,10 +30,12 @@ async def dashboard():
           colors: { 
             brand: { bg: 'var(--bg)', card: 'var(--glass-bg)', border: 'var(--glass-border)' }, 
             neon: { 
-              cyan: 'var(--primary)', 
-              green: 'var(--up-color)', 
-              red: 'var(--down-color)', 
-              purple: 'var(--secondary)' 
+              primary: 'var(--primary)', 
+              secondary: 'var(--secondary)', 
+              up: 'var(--up-color)', 
+              down: 'var(--down-color)',
+              text: 'var(--text-main)',
+              muted: 'var(--text-muted)'
             } 
           }, 
           fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Share Tech Mono', 'monospace'], orbitron: ['Orbitron', 'sans-serif'] } 
@@ -45,27 +46,27 @@ async def dashboard():
   <style>
     /* --- Dynamic Theme Variables --- */
     :root, body.theme-cyber {
-        --bg: #020308;
-        --bg-grid: rgba(0, 243, 255, 0.02);
+        --bg: #03040a;
+        --bg-grid: rgba(0, 243, 255, 0.03);
         --primary: #00f3ff;
         --secondary: #b026ff;
-        --glass-bg: rgba(10, 15, 30, 0.65);
-        --glass-border: rgba(0, 243, 255, 0.15);
+        --glass-bg: rgba(10, 15, 30, 0.7);
+        --glass-border: rgba(0, 243, 255, 0.2);
         --up-color: #00ff66;
         --down-color: #ff003c;
-        --card-shadow: 0 4px 30px rgba(0,0,0,0.5);
-        --btn-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(255, 255, 255, 0.05), inset 0px 1px 1px rgba(255, 255, 255, 0.2);
+        --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
     }
 
     body.theme-matrix {
         --bg: #020a05;
-        --bg-grid: rgba(0, 255, 102, 0.03);
+        --bg-grid: rgba(0, 255, 102, 0.05);
         --primary: #00ff66;
         --secondary: #00cc44;
         --up-color: #00ff66;
         --down-color: #ff003c;
+        --glass-border: rgba(0, 255, 102, 0.2);
     }
 
     body.theme-gold {
@@ -75,6 +76,7 @@ async def dashboard():
         --secondary: #F0B90B;
         --up-color: #0ecb81;
         --down-color: #f6465d;
+        --glass-border: rgba(252, 213, 53, 0.2);
     }
 
     body.theme-neumorphism {
@@ -87,50 +89,69 @@ async def dashboard():
         --up-color: #4ade80;
         --down-color: #f87171;
         --card-shadow: 8px 8px 16px #14161b, -8px -8px 16px #282c37;
-        --btn-shadow: 5px 5px 10px #14161b, -5px -5px 10px #282c37;
         --text-main: #e2e8f0;
         --text-muted: #94a3b8;
     }
 
     body.theme-light {
-        --bg: #f3f4f6;
+        --bg: #f8fafc;
         --bg-grid: rgba(0, 0, 0, 0.02);
         --primary: #3b82f6;
         --secondary: #f97316;
         --glass-bg: #ffffff;
-        --glass-border: #e5e7eb;
+        --glass-border: #e2e8f0;
         --up-color: #10b981;
         --down-color: #ef4444;
-        --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-        --btn-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-        --text-main: #111827;
-        --text-muted: #6b7280;
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        --text-main: #0f172a;
+        --text-muted: #64748b;
     }
-    body.theme-light { background-color: var(--bg); color: var(--text-main); }
-    body.theme-light h1, body.theme-light h2, body.theme-light h3, body.theme-light .text-white { color: var(--text-main) !important; }
-    body.theme-light .text-slate-200, body.theme-light .text-slate-300, body.theme-light .text-slate-400 { color: var(--text-muted) !important; }
-    body.theme-light .ticker-wrap { background: #fff; border-color: #e5e7eb; }
-    body.theme-light .ticker span { color: var(--text-main); }
-    body.theme-light .glass { background: #fff; border-color: #e5e7eb; }
-    body.theme-light .liquid-card { background: #fff; border-color: #e5e7eb; }
-    body.theme-light .liquid-btn { background: #fff; border-color: #e5e7eb; color: var(--text-main); }
-    body.theme-light #neural-logs { background: #f9fafb; color: var(--text-main); }
-    body.theme-light .text-slate-500 { color: #9ca3af !important; }
-    body.theme-light .text-slate-600 { color: #4b5563 !important; }
 
-    body { background-color: var(--bg); background-image: radial-gradient(circle at 50% 0%, var(--bg-grid) 0%, transparent 60%), linear-gradient(var(--bg-grid) 1px, transparent 1px), linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; -webkit-tap-highlight-color: transparent; transition: background-color 0.5s ease; color: var(--text-main); font-family: 'Inter', sans-serif; }
+    body { 
+        background-color: var(--bg); 
+        background-image: radial-gradient(circle at 50% 0%, var(--bg-grid) 0%, transparent 60%), linear-gradient(var(--bg-grid) 1px, transparent 1px), linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px); 
+        background-size: 100% 100%, 40px 40px, 40px 40px; 
+        color: var(--text-main); 
+        font-family: 'Inter', sans-serif; 
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
     
-    .glass { background: var(--glass-bg); backdrop-filter: blur(16px); border: 1px solid var(--glass-border); box-shadow: var(--card-shadow); transition: all 0.5s ease; border-radius: 1rem; }
-    .liquid-card { background: var(--glass-bg); box-shadow: var(--card-shadow); border: 1px solid var(--glass-border); border-radius: 1rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-    .liquid-btn { background: var(--glass-bg); box-shadow: var(--btn-shadow); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); transition: all 0.2s ease; }
-    .liquid-btn:active { transform: scale(0.98); }
+    .glass { 
+        background: var(--glass-bg); 
+        backdrop-filter: blur(16px); 
+        border: 1px solid var(--glass-border); 
+        box-shadow: var(--card-shadow); 
+        border-radius: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .liquid-btn {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 0.5rem;
+        transition: all 0.2s ease;
+        box-shadow: var(--card-shadow);
+    }
+    .liquid-btn:active { transform: scale(0.96); }
 
     .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; opacity: 0.5; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     
-    .tab-btn { padding: 0.75rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+    .tab-btn { 
+        padding: 0.75rem 0.5rem; 
+        font-size: 0.75rem; 
+        font-weight: 600; 
+        color: var(--text-muted); 
+        border-bottom: 2px solid transparent; 
+        transition: all 0.2s; 
+        display: flex; 
+        align-items: center; 
+        gap: 0.25rem; 
+        white-space: nowrap; 
+    }
     .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
     
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -139,24 +160,35 @@ async def dashboard():
 </head>
 <body class="theme-cyber min-h-screen pb-10">
 
-  <div id="toast-container" class="fixed top-4 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
+  <div id="toast-container" class="fixed top-4 left-0 right-0 z-[100] flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
 
-  <nav class="glass border-b sticky top-0 z-30" style="border-color: var(--glass-border);">
+  <nav class="glass sticky top-0 z-30 rounded-none border-t-0 border-x-0" style="border-bottom: 1px solid var(--glass-border);">
     <div class="max-w-md mx-auto px-4">
       <div class="flex justify-between items-center h-14 gap-2">
-        <div class="flex items-center gap-1.5 flex-shrink-0">
-            <div style="background-color: var(--primary); color: #fff; width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: var(--btn-shadow);">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
+        <!-- Logo -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <div style="background-color: var(--primary); color: var(--bg); width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--primary);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>
             </div>
-            <span class="font-bold text-sm tracking-tight whitespace-nowrap" style="color: var(--text-main);">AI QUANT</span>
+            <span class="font-bold text-base tracking-tight whitespace-nowrap" style="color: var(--text-main);">AI QUANT</span>
         </div>
+        <!-- Buttons -->
         <div class="flex gap-1.5 overflow-x-auto no-scrollbar items-center">
-            <button onclick="cycleTheme()" class="p-1.5 rounded-lg liquid-btn text-sm" title="Change Theme">🎨</button>
-            <button onclick="runAutoTune()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--secondary);"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO</button>
-            <button onclick="openBacktest()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--text-main);"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST</button>
-            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap liquid-btn" style="color: var(--up-color);"><i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE</button>
+            <button onclick="cycleTheme()" class="p-2 liquid-btn" title="Change Theme">
+                <i data-lucide="palette" class="w-3.5 h-3.5" style="color: var(--primary);"></i>
+            </button>
+            <button onclick="runAutoTune()" class="px-2.5 py-1.5 liquid-btn flex items-center gap-1 whitespace-nowrap text-[10px] font-bold" style="color: var(--secondary);">
+                <i data-lucide="cpu" class="w-3.5 h-3.5"></i> AUTO
+            </button>
+            <button onclick="openBacktest()" class="px-2.5 py-1.5 liquid-btn flex items-center gap-1 whitespace-nowrap text-[10px] font-bold" style="color: var(--text-main);">
+                <i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TEST
+            </button>
+            <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 liquid-btn flex items-center gap-1 whitespace-nowrap text-[10px] font-bold" style="color: var(--up-color);">
+                <i data-lucide="activity" class="w-3.5 h-3.5"></i> ACTIVE
+            </button>
         </div>
       </div>
+      <!-- Tabs -->
       <div class="flex gap-1 mt-1 overflow-x-auto custom-scroll border-b text-[11px] px-1" style="border-color: var(--glass-border);">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</button>
         <button class="tab-btn" onclick="switchTab('positions', this)"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Positions</button>
@@ -168,158 +200,170 @@ async def dashboard():
 
   <div class="max-w-md mx-auto px-4 pt-4">
     
+    <!-- OVERVIEW TAB -->
     <div id="tab-overview" class="space-y-4">
-        <section class="liquid-card p-5 relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-4 opacity-5"><i data-lucide="wallet" class="w-24 h-24" style="color: var(--primary);"></i></div>
-            <p class="text-xs font-medium mb-1" style="color: var(--text-muted);">Total Balance</p>
+        <!-- Balance -->
+        <section class="glass p-5 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="wallet" class="w-24 h-24" style="color: var(--primary);"></i></div>
+            <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Total Balance</p>
             <div class="flex items-end gap-2 relative z-10">
-                <h2 id="total-equity" class="text-3xl font-bold" style="color: var(--text-main);">0.00</h2>
-                <span class="text-xs mb-1 font-medium" style="color: var(--text-muted);">USDT</span>
+                <h2 id="total-equity" class="text-4xl font-bold font-mono tracking-tighter" style="color: var(--text-main);">0.00</h2>
+                <span class="text-xs mb-1.5 font-bold" style="color: var(--text-muted);">USDT</span>
             </div>
-            <div id="pnl-display" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border relative z-10" style="background: var(--glass-bg); border-color: var(--glass-border);">
-                <i data-lucide="minus" class="w-3.5 h-3.5" id="pnl-icon" style="color: var(--text-muted);"></i>
+            <div id="pnl-display" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border relative z-10" style="background: rgba(255,255,255,0.05); border-color: var(--glass-border);">
+                <i data-lucide="minus" class="w-4 h-4" id="pnl-icon" style="color: var(--text-muted);"></i>
                 <span id="pnl-value" style="color: var(--text-muted);">0.00 USDT</span>
-                <span id="pnl-percent" style="color: var(--text-muted);">(0.00%)</span>
+                <span id="pnl-percent" style="color: var(--text-muted); opacity: 0.7;">(0.00%)</span>
             </div>
         </section>
 
+        <!-- Stats Doughnuts -->
         <section class="grid grid-cols-2 gap-3">
-            <div class="liquid-card p-3 flex flex-col items-center justify-center">
-                <h3 class="text-[11px] font-semibold mb-1" style="color: var(--text-muted);">Win Rate</h3>
-                <div class="relative w-16 h-16">
+            <div class="glass p-4 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-bold uppercase mb-2" style="color: var(--text-muted);">Win Rate</h3>
+                <div class="relative w-20 h-20">
                     <canvas id="winrateChart"></canvas>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="winrate" class="text-xs font-bold" style="color: var(--text-main);">0%</span>
+                        <span id="winrate" class="text-sm font-bold font-mono" style="color: var(--text-main);">0%</span>
                     </div>
                 </div>
             </div>
-            <div class="liquid-card p-3 flex flex-col items-center justify-center">
-                <h3 class="text-[11px] font-semibold mb-1" style="color: var(--text-muted);">Profit Factor</h3>
-                <div class="relative w-16 h-16">
+            <div class="glass p-4 flex flex-col items-center justify-center">
+                <h3 class="text-[11px] font-bold uppercase mb-2" style="color: var(--text-muted);">Profit Factor</h3>
+                <div class="relative w-20 h-20">
                     <canvas id="pfChart"></canvas>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <span id="pf" class="text-xs font-bold" style="color: var(--text-main);">0.0</span>
+                        <span id="pf" class="text-sm font-bold font-mono" style="color: var(--text-main);">0.0</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="liquid-card p-4">
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-sm font-semibold flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="bar-chart-2" class="w-4 h-4" style="color: var(--primary);"></i> Weekly Performance</h3>
+        <!-- Weekly Bar Chart -->
+        <section class="glass p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="bar-chart-2" class="w-4 h-4" style="color: var(--primary);"></i> Weekly PnL</h3>
                 <span class="text-[10px] font-medium" style="color: var(--text-muted);">Last 7 Days</span>
             </div>
             <div class="h-32 w-full">
                 <canvas id="weeklyChart"></canvas>
             </div>
             
-            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t" style="border-color: var(--glass-border);">
+            <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t" style="border-color: var(--glass-border);">
                 <div class="text-center">
-                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Trades</p>
-                    <p id="stat-trades" class="text-sm font-bold" style="color: var(--text-main);">0</p>
+                    <p class="text-[10px] uppercase font-bold" style="color: var(--text-muted);">Trades</p>
+                    <p id="stat-trades" class="text-sm font-bold font-mono mt-1" style="color: var(--text-main);">0</p>
                 </div>
                 <div class="text-center border-x" style="border-color: var(--glass-border);">
-                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Best Trade</p>
-                    <p id="stat-best" class="text-sm font-bold" style="color: var(--text-muted);">0.00</p>
+                    <p class="text-[10px] uppercase font-bold" style="color: var(--text-muted);">Best</p>
+                    <p id="stat-best" class="text-sm font-bold font-mono mt-1" style="color: var(--text-muted);">0.00</p>
                 </div>
                 <div class="text-center">
-                    <p class="text-[10px] uppercase font-semibold" style="color: var(--text-muted);">Worst Trade</p>
-                    <p id="stat-worst" class="text-sm font-bold" style="color: var(--text-muted);">0.00</p>
+                    <p class="text-[10px] uppercase font-bold" style="color: var(--text-muted);">Worst</p>
+                    <p id="stat-worst" class="text-sm font-bold font-mono mt-1" style="color: var(--text-muted);">0.00</p>
                 </div>
             </div>
         </section>
 
-        <section class="liquid-card p-4">
+        <!-- Live Chart -->
+        <section class="glass p-4">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-sm font-semibold" style="color: var(--text-main);">Market Chart</h3>
-                <select id="chart-symbol" onchange="changeChartSymbol()" class="border text-[11px] rounded-md px-2 py-1 outline-none font-medium" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
+                <h3 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-main);">Market Chart</h3>
+                <select id="chart-symbol" onchange="changeChartSymbol()" class="border text-[11px] rounded-md px-2 py-1 outline-none font-bold" style="background: var(--bg); border-color: var(--glass-border); color: var(--text-main);">
                     <option value="BTCUSDT">BTC/USDT</option>
                     <option value="ETHUSDT">ETH/USDT</option>
                     <option value="SOLUSDT">SOL/USDT</option>
                     <option value="BNBUSDT">BNB/USDT</option>
                 </select>
             </div>
-            <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden"></div>
+            <div id="tvchart" class="w-full h-48 rounded-lg overflow-hidden border" style="border-color: var(--glass-border);"></div>
         </section>
 
-        <section class="liquid-card p-3 flex items-center justify-between">
+        <!-- Breadth -->
+        <section class="glass p-3 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <i data-lucide="bar-chart" class="w-4 h-4" style="color: var(--text-muted);"></i>
-                <span class="text-xs font-semibold" style="color: var(--text-main);">Market Breadth</span>
+                <span class="text-xs font-bold" style="color: var(--text-main);">Market Breadth</span>
             </div>
             <div class="flex items-center gap-3 w-1/2">
                 <div class="w-full rounded-full h-1.5 flex-1" style="background: rgba(255,255,255,0.1);">
                     <div id="breadth-bar" class="h-1.5 rounded-full transition-all duration-500" style="width: 50%; background: var(--text-muted);"></div>
                 </div>
-                <span id="breadth-label" class="text-[10px] font-bold w-12 text-right" style="color: var(--text-main);">50%</span>
+                <span id="breadth-label" class="text-[10px] font-bold w-12 text-right font-mono" style="color: var(--text-main);">50%</span>
             </div>
         </section>
 
-        <section class="liquid-card p-4">
-            <h3 class="text-sm font-semibold mb-3 flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="globe" class="w-4 h-4" style="color: var(--text-muted);"></i> Market Watch</h3>
-            <div class="h-36 overflow-y-auto custom-scroll pr-1" id="market-watch">
+        <!-- Market Watch -->
+        <section class="glass p-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="globe" class="w-4 h-4" style="color: var(--text-muted);"></i> Market Watch</h3>
+            <div class="h-40 overflow-y-auto custom-scroll pr-1" id="market-watch">
                 <div class="text-center text-xs py-4" style="color: var(--text-muted);">Loading data...</div>
             </div>
         </section>
     </div>
 
+    <!-- POSITIONS TAB -->
     <div id="tab-positions" class="hidden space-y-3">
         <div class="flex justify-between items-center mb-1">
             <h3 class="text-lg font-bold" style="color: var(--text-main);">Active Positions</h3>
-            <span id="pos-count" class="text-xs font-semibold px-2 py-1 rounded-md" style="background: var(--glass-bg); color: var(--text-muted);">0 Open</span>
+            <span id="pos-count" class="text-xs font-bold px-2 py-1 rounded-md" style="background: var(--glass-bg); color: var(--text-muted); border: 1px solid var(--glass-border);">0 Open</span>
         </div>
         <div id="active-positions-list" class="space-y-3"></div>
     </div>
 
+    <!-- HISTORY TAB -->
     <div id="tab-history" class="hidden space-y-3">
         <h3 class="text-lg font-bold mb-1" style="color: var(--text-main);">Trade History</h3>
-        <div class="liquid-card overflow-hidden" id="trade-history">
+        <div class="glass overflow-hidden" id="trade-history">
             <div class="text-center text-xs py-8" style="color: var(--text-muted);">Loading history...</div>
         </div>
     </div>
 
+    <!-- LOGS TAB -->
     <div id="tab-logs" class="hidden space-y-3">
         <h3 class="text-lg font-bold mb-1" style="color: var(--text-main);">AI Neural Logs</h3>
-        <div class="liquid-card p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll" style="background: #0f172a; color: #cbd5e1;" id="neural-logs">
+        <div class="glass p-3 h-[calc(100vh-200px)] overflow-y-auto font-mono text-[10px] custom-scroll" style="background: #0f172a; color: #cbd5e1;" id="neural-logs">
             <div style="color: var(--text-muted);">Waiting for scan cycle...</div>
         </div>
     </div>
 
   </div>
 
-  <!-- Backtest Modal (Bulletproof) -->
-  <div id="backtest-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50" style="display: none;">
+  <!-- Custom Modals (Perfectly Centered) -->
+  <div id="backtest-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" style="display: none;">
     <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="liquid-card p-5 w-full max-w-sm shadow-xl">
+        <div class="glass p-5 w-full max-w-sm shadow-2xl">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-base font-bold flex items-center gap-2" style="color: var(--text-main);"><i data-lucide="flask-conical" class="w-4 h-4" style="color: var(--primary);"></i> Run Backtest</h3>
-            <button onclick="closeBacktest()" style="color: var(--text-muted);"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <button onclick="closeBacktest()" class="liquid-btn p-1" style="color: var(--text-muted);"><i data-lucide="x" class="w-4 h-4"></i></button>
           </div>
           <div class="space-y-3 mb-5">
-            <select id="bt-symbol" class="w-full border rounded-lg p-2 text-xs outline-none" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
+            <select id="bt-symbol" class="w-full border rounded-lg p-2 text-xs outline-none font-bold" style="background: var(--bg); border-color: var(--glass-border); color: var(--text-main);">
               <option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option>
             </select>
-            <select id="bt-strat" class="w-full border rounded-lg p-2 text-xs outline-none" style="background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-main);">
+            <select id="bt-strat" class="w-full border rounded-lg p-2 text-xs outline-none font-bold" style="background: var(--bg); border-color: var(--glass-border); color: var(--text-main);">
               <option value="all">All Strategies</option><option value="trend">Trend</option><option value="mean_reversion">Mean Reversion</option><option value="breakout">Breakout</option>
             </select>
           </div>
-          <button onclick="runBacktest()" id="bt-run-btn" class="w-full font-semibold py-2 rounded-lg transition-all flex justify-center items-center gap-2 text-sm" style="background: var(--primary); color: #fff;">
-            <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation
+          <button onclick="runBacktest()" id="bt-run-btn" class="w-full font-bold py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 text-sm shadow-lg" style="background: var(--primary); color: var(--bg);">
+            <i data-lucide="play" class="w-4 h-4"></i> Run Simulation
           </button>
-          <div id="bt-results" class="mt-3 text-[10px] font-mono whitespace-pre-wrap hidden p-2 rounded-lg border max-h-40 overflow-y-auto custom-scroll" style="background: rgba(0,0,0,0.2); border-color: var(--glass-border); color: var(--text-main);"></div>
+          <div id="bt-results" class="mt-3 text-[10px] font-mono whitespace-pre-wrap hidden p-3 rounded-lg border max-h-40 overflow-y-auto custom-scroll" style="background: rgba(0,0,0,0.2); border-color: var(--glass-border); color: var(--text-main);"></div>
         </div>
     </div>
   </div>
 
-  <!-- Confirm Modal (Bulletproof) -->
-  <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50" style="display: none;">
+  <div id="confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" style="display: none;">
     <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="liquid-card p-5 w-full max-w-sm shadow-xl text-center">
-          <h3 id="confirm-title" class="text-base font-bold mb-2" style="color: var(--text-main);">تأكيد</h3>
+        <div class="glass p-6 w-full max-w-sm shadow-2xl text-center">
+          <div class="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center" style="background: rgba(255,255,255,0.1);">
+              <i data-lucide="alert-circle" class="w-6 h-6" style="color: var(--primary);"></i>
+          </div>
+          <h3 id="confirm-title" class="text-lg font-bold mb-2" style="color: var(--text-main);">تأكيد</h3>
           <p id="confirm-message" class="text-sm mb-6" style="color: var(--text-muted);">هل أنت متأكد؟</p>
           <div class="grid grid-cols-2 gap-3">
-            <button onclick="closeConfirm(false)" class="w-full font-semibold py-2 rounded-lg transition-all text-sm liquid-btn" style="color: var(--text-main);">إلغاء</button>
-            <button onclick="closeConfirm(true)" class="w-full font-semibold py-2 rounded-lg transition-all text-sm" style="background: var(--primary); color: #fff;">حسناً</button>
+            <button onclick="closeConfirm(false)" class="w-full font-bold py-2.5 rounded-lg transition-all text-sm liquid-btn" style="color: var(--text-main);">إلغاء</button>
+            <button onclick="closeConfirm(true)" class="w-full font-bold py-2.5 rounded-lg transition-all text-sm shadow-lg" style="background: var(--primary); color: var(--bg);">حسناً</button>
           </div>
         </div>
     </div>
@@ -350,37 +394,43 @@ function applyTheme(index) {
     document.body.classList.add(themes[index]);
     localStorage.setItem('themeIndex', index);
     
-    // Update Chart Colors dynamically
+    const styles = getComputedStyle(document.body);
+    const upColor = styles.getPropertyValue('--up-color').trim();
+    const downColor = styles.getPropertyValue('--down-color').trim();
+    const primaryColor = styles.getPropertyValue('--primary').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const isLight = themes[index] === 'theme-light';
+    
+    // Update TradingView Chart
     if (tvChart && candleSeries) {
-        const styles = getComputedStyle(document.body);
-        const upColor = styles.getPropertyValue('--up-color').trim();
-        const downColor = styles.getPropertyValue('--down-color').trim();
-        const isLight = themes[index] === 'theme-light';
-        
         candleSeries.applyOptions({
             upColor: upColor,
             downColor: downColor,
             wickUpColor: upColor,
             wickDownColor: downColor
         });
-        
         tvChart.applyOptions({
-            layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#374151' : '#64748b' },
-            grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.02)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.02)' } }
+            layout: { background: { type: 'solid', color: 'transparent' }, textColor: textColor },
+            grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)' } }
         });
-        
-        // إعادة رسم الخطوط والأسهم لتتطابق مع اللون الجديد
         drawPositionOverlays(); 
     }
     
-    // Update Charts (Donut & Bar) colors
+    // Update Doughnut Charts
     if(winrateChart) {
-        winrateChart.data.datasets[0].backgroundColor[0] = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
+        winrateChart.data.datasets[0].backgroundColor[0] = upColor;
+        winrateChart.data.datasets[0].backgroundColor[1] = isLight ? '#e2e8f0' : 'rgba(255,255,255,0.1)';
         winrateChart.update();
     }
+    if(pfChart) {
+        pfChart.data.datasets[0].backgroundColor[0] = '#8b5cf6';
+        pfChart.data.datasets[0].backgroundColor[1] = isLight ? '#e2e8f0' : 'rgba(255,255,255,0.1)';
+        pfChart.update();
+    }
+    // Update Weekly Chart
     if(weeklyChart) {
         const data = weeklyChart.data.datasets[0].data;
-        weeklyChart.data.datasets[0].backgroundColor = data.map(v => v > 0 ? getComputedStyle(document.body).getPropertyValue('--up-color').trim() : (v < 0 ? getComputedStyle(document.body).getPropertyValue('--down-color').trim() : '#cbd5e1'));
+        weeklyChart.data.datasets[0].backgroundColor = data.map(v => v > 0 ? upColor : (v < 0 ? downColor : (isLight ? '#e2e8f0' : 'rgba(255,255,255,0.1)')));
         weeklyChart.update();
     }
 }
@@ -397,11 +447,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    const bgColor = type === 'success' ? 'var(--up-color)' : type === 'error' ? 'var(--down-color)' : 'var(--text-main)';
+    const bgColor = type === 'success' ? 'var(--up-color)' : type === 'error' ? 'var(--down-color)' : 'var(--primary)';
+    const textColor = type === 'info' ? 'var(--bg)' : '#fff';
     const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
     
-    toast.className = `toast text-white px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto text-xs font-medium`;
+    toast.className = `toast px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 pointer-events-auto text-xs font-bold`;
     toast.style.backgroundColor = bgColor;
+    toast.style.color = textColor;
     toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${message}</span>`;
     container.appendChild(toast);
     refreshIcons();
@@ -522,7 +574,7 @@ async function runBacktest() {
         } 
         else { showToast("Error: " + data.error, 'error'); }
     } catch(e) { showToast("Failed to run backtest", 'error'); }
-    btn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5"></i> Run Simulation'; btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Run Simulation'; btn.disabled = false;
     refreshIcons();
 }
 
@@ -531,11 +583,12 @@ function initTVChart() {
     if(!chartElement) return;
     const width = chartElement.clientWidth > 0 ? chartElement.clientWidth : 350;
     const isLight = document.body.classList.contains('theme-light');
+    const textColor = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
     
     tvChart = LightweightCharts.createChart(chartElement, {
         width: width, height: 192,
-        layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#374151' : '#64748b' },
-        grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255, 255, 255, 0.02)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255, 255, 255, 0.02)' } },
+        layout: { background: { type: 'solid', color: 'transparent' }, textColor: textColor },
+        grid: { vertLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)' }, horzLines: { color: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: { borderVisible: false },
         timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
@@ -563,19 +616,20 @@ function initTVChart() {
 
 function initCharts() {
     const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
-    const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
+    const isLight = document.body.classList.contains('theme-light');
+    const emptyColor = isLight ? '#e2e8f0' : 'rgba(255,255,255,0.1)';
 
     const ctxWin = document.getElementById('winrateChart').getContext('2d');
     winrateChart = new Chart(ctxWin, {
         type: 'doughnut',
-        data: { datasets: [{ data: [0, 100], backgroundColor: [upColor, 'rgba(255,255,255,0.1)'], borderWidth: 0, cutout: '80%' }] },
+        data: { datasets: [{ data: [0, 100], backgroundColor: [upColor, emptyColor], borderWidth: 0, cutout: '75%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
     });
 
     const ctxPf = document.getElementById('pfChart').getContext('2d');
     pfChart = new Chart(ctxPf, {
         type: 'doughnut',
-        data: { datasets: [{ data: [0, 100], backgroundColor: ['#8b5cf6', 'rgba(255,255,255,0.1)'], borderWidth: 0, cutout: '80%' }] },
+        data: { datasets: [{ data: [0, 100], backgroundColor: ['#8b5cf6', emptyColor], borderWidth: 0, cutout: '75%' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
     });
 
@@ -587,7 +641,7 @@ function initCharts() {
             datasets: [{
                 label: 'PnL (USDT)',
                 data: [0, 0, 0, 0, 0, 0, 0],
-                backgroundColor: 'rgba(255,255,255,0.1)',
+                backgroundColor: emptyColor,
                 borderRadius: 4,
                 barPercentage: 0.6
             }]
@@ -596,7 +650,7 @@ function initCharts() {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw > 0 ? '+' : ''}${fmt(ctx.raw)} USDT` } } },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { size: 10 }, color: 'var(--text-muted)' } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, color: getComputedStyle(document.body).getPropertyValue('--text-muted').trim() } },
                 y: { display: false, grace: '15%' } 
             }
         }
@@ -611,13 +665,12 @@ async function loadLiveTickers() {
             const marketGrid = document.getElementById('market-watch');
             marketGrid.innerHTML = data.map(d => {
                 let textColor = 'var(--text-muted)';
-                let bgColor = 'transparent';
                 let sign = '';
                 if (d.change > 0) { textColor = 'var(--up-color)'; sign = '+'; }
                 else if (d.change < 0) { textColor = 'var(--down-color)'; }
 
                 return `
-                <div class="flex justify-between items-center p-1.5 rounded-md mb-1" style="background: rgba(255,255,255,0.03);">
+                <div class="flex justify-between items-center p-2 rounded-lg mb-1" style="background: rgba(255,255,255,0.03);">
                     <span class="font-bold text-[11px]" style="color: var(--text-main);">${d.symbol}</span>
                     <div class="text-right">
                         <div class="text-[11px] font-mono font-semibold" style="color: var(--text-main);">$${fmtPrice(d.price)}</div>
@@ -694,7 +747,10 @@ function updateWeeklyStats(trades) {
     
     const upColor = getComputedStyle(document.body).getPropertyValue('--up-color').trim();
     const downColor = getComputedStyle(document.body).getPropertyValue('--down-color').trim();
-    const bgColors = data.map(v => v > 0 ? upColor : (v < 0 ? downColor : 'rgba(255,255,255,0.1)'));
+    const isLight = document.body.classList.contains('theme-light');
+    const emptyColor = isLight ? '#e2e8f0' : 'rgba(255,255,255,0.1)';
+    
+    const bgColors = data.map(v => v > 0 ? upColor : (v < 0 ? downColor : emptyColor));
     
     if(weeklyChart) {
         weeklyChart.data.labels = labels;
@@ -771,26 +827,29 @@ async function load(){
   if (pnlVal > 0) {
       pnlValueEl.textContent = `+${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(+${pnlPercent.toFixed(2)}%)`;
+      pnlDisplay.style.borderColor = upColor;
       pnlValueEl.style.color = upColor;
       pnlPercentEl.style.color = upColor;
       pnlIcon.setAttribute('data-lucide', 'trending-up');
-      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.className = "w-4 h-4";
       pnlIcon.style.color = upColor;
   } else if (pnlVal < 0) {
       pnlValueEl.textContent = `${fmt(pnlVal)} USDT`;
       pnlPercentEl.textContent = `(${pnlPercent.toFixed(2)}%)`;
+      pnlDisplay.style.borderColor = downColor;
       pnlValueEl.style.color = downColor;
       pnlPercentEl.style.color = downColor;
       pnlIcon.setAttribute('data-lucide', 'trending-down');
-      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.className = "w-4 h-4";
       pnlIcon.style.color = downColor;
   } else {
       pnlValueEl.textContent = `0.00 USDT`;
       pnlPercentEl.textContent = `(0.00%)`;
+      pnlDisplay.style.borderColor = neutralColor;
       pnlValueEl.style.color = neutralColor;
       pnlPercentEl.style.color = neutralColor;
       pnlIcon.setAttribute('data-lucide', 'minus');
-      pnlIcon.className = "w-3.5 h-3.5";
+      pnlIcon.className = "w-4 h-4";
       pnlIcon.style.color = neutralColor;
   }
   refreshIcons();
@@ -820,7 +879,7 @@ async function load(){
   const posContainer = document.getElementById('active-positions-list');
   document.getElementById('pos-count').textContent = `${ps.length} Open`;
   if(ps.length === 0) {
-    posContainer.innerHTML = '<div class="text-center text-sm py-8 liquid-card" style="color: var(--text-muted);">No active positions</div>';
+    posContainer.innerHTML = '<div class="text-center text-sm py-8 glass" style="color: var(--text-muted);">No active positions</div>';
   } else {
     posContainer.innerHTML = ps.map(pos => {
         const currentPrice = Number(pos.current_price || pos.entry_price);
@@ -835,28 +894,28 @@ async function load(){
         else if (unrealizedPnl < 0) { pnlColor = downColor; }
 
         return `
-      <div class="liquid-card p-3 border-l-4" style="border-left-color: ${pos.side === 'LONG' ? upColor : downColor};">
-        <div class="flex justify-between items-start mb-2">
+      <div class="glass p-4 border-l-4" style="border-left-color: ${pos.side === 'LONG' ? upColor : downColor};">
+        <div class="flex justify-between items-start mb-3">
           <div>
               <h4 class="font-bold text-base" style="color: var(--text-main);">${pos.symbol}</h4>
               <div class="flex gap-2 items-center mt-1">
-                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="background: rgba(255,255,255,0.1); color: var(--text-main);">${pos.side}</span>
-                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.1); color: var(--text-main);">${pos.side}</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${pnlSign}${fmt(unrealizedPnl)} USDT</span>
               </div>
           </div>
           <div class="text-right">
-            <p class="text-[9px] uppercase" style="color: var(--text-muted);">Entry</p>
-            <p class="font-mono text-xs font-semibold" style="color: var(--text-main);">${fmtPrice(entryPrice)}</p>
-            <p class="text-[9px] uppercase mt-0.5" style="color: var(--text-muted);">Current</p>
-            <p class="font-mono text-[11px] font-semibold" style="color: var(--text-muted);">${fmtPrice(currentPrice)}</p>
+            <p class="text-[9px] font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Entry</p>
+            <p class="font-mono text-xs font-bold" style="color: var(--text-main);">${fmtPrice(entryPrice)}</p>
+            <p class="text-[9px] font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Current</p>
+            <p class="font-mono text-[11px] font-bold" style="color: var(--text-muted);">${fmtPrice(currentPrice)}</p>
           </div>
         </div>
-        <div class="flex justify-between items-center pt-2 border-t" style="border-color: var(--glass-border);">
-           <div class="flex gap-3">
-               <div><p class="text-[9px] uppercase" style="color: var(--text-muted);">Target</p><p class="font-mono text-[11px] font-semibold" style="color: ${upColor};">${fmtPrice(pos.target_price)}</p></div>
-               <div><p class="text-[9px] uppercase" style="color: var(--text-muted);">Stop</p><p class="font-mono text-[11px] font-semibold" style="color: ${downColor};">${fmtPrice(pos.stop_price)}</p></div>
+        <div class="flex justify-between items-center pt-3 border-t" style="border-color: var(--glass-border);">
+           <div class="flex gap-4">
+               <div><p class="text-[9px] font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Target</p><p class="font-mono text-[11px] font-bold" style="color: ${upColor};">${fmtPrice(pos.target_price)}</p></div>
+               <div><p class="text-[9px] font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Stop</p><p class="font-mono text-[11px] font-bold" style="color: ${downColor};">${fmtPrice(pos.stop_price)}</p></div>
            </div>
-           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[9px] font-bold border px-2.5 py-1 rounded-md transition-colors liquid-btn" style="color: ${downColor}; border-color: ${downColor}40;">CLOSE</button>
+           <button onclick="closePosition(${pos.id}, '${pos.symbol}')" class="text-[10px] font-bold border px-3 py-1.5 rounded-lg transition-colors liquid-btn" style="color: ${downColor}; border-color: ${downColor}40;">CLOSE</button>
         </div>
       </div>
     `}).join('');
@@ -868,8 +927,8 @@ async function load(){
       histContainer.innerHTML = '<div class="text-center text-xs py-8" style="color: var(--text-muted);">No recent trades</div>';
   } else {
       let html = `<table class="w-full text-left text-xs" style="color: var(--text-muted);">
-        <thead class="text-[10px] uppercase border-b" style="background: rgba(255,255,255,0.02); border-color: var(--glass-border);">
-          <tr><th class="p-2">Asset</th><th class="p-2">Side</th><th class="p-2 text-right">Entry</th><th class="p-2 text-right">Net PnL</th></tr>
+        <thead class="text-[10px] font-bold uppercase border-b" style="background: rgba(255,255,255,0.02); border-color: var(--glass-border);">
+          <tr><th class="p-3">Asset</th><th class="p-3">Side</th><th class="p-3 text-right">Entry</th><th class="p-3 text-right">Net PnL</th></tr>
         </thead><tbody>`;
       closedTrades.forEach(t => {
           let pnlColor = neutralColor;
@@ -878,10 +937,10 @@ async function load(){
           else if (t.net_pnl < 0) { pnlColor = downColor; }
 
           html += `<tr class="border-b hover:bg-white/5 transition-colors" style="border-color: var(--glass-border);">
-              <td class="p-2 font-bold text-[11px]" style="color: var(--text-main);">${t.symbol}</td>
-              <td class="p-2"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${t.side}</span></td>
-              <td class="p-2 text-right font-mono text-[11px]">${fmtPrice(t.entry_price)}</td>
-              <td class="p-2 text-right font-mono font-bold text-[11px]" style="color: ${pnlColor};">${pnlSign}${fmt(t.net_pnl)}</td>
+              <td class="p-3 font-bold text-[11px]" style="color: var(--text-main);">${t.symbol}</td>
+              <td class="p-3"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="color: ${pnlColor}; background: rgba(255,255,255,0.05);">${t.side}</span></td>
+              <td class="p-3 text-right font-mono text-[11px]">${fmtPrice(t.entry_price)}</td>
+              <td class="p-3 text-right font-mono font-bold text-[11px]" style="color: ${pnlColor};">${pnlSign}${fmt(t.net_pnl)}</td>
           </tr>`;
       });
       html += '</tbody></table>';
@@ -895,7 +954,7 @@ async function load(){
     logContainer.innerHTML = decisions.slice(0, 25).map(d => {
         const time = new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
         let colorStyle = (d.action.includes('BUY') || d.action.includes('LONG')) ? `color: ${upColor};` : (d.action.includes('SHORT') || d.action.includes('SELL')) ? `color: ${downColor};` : `color: #94a3b8;`;
-        return `<div class="mb-1 flex gap-2 text-[10px]"><span style="color: var(--text-muted); shrink-0">[${time}]</span> <span class="font-semibold shrink-0" style="color: var(--text-main);">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="truncate" style="color: var(--text-muted);">${String(d.reason || '').length > 60 ? String(d.reason).substring(0, 60) + '...' : String(d.reason || '')}</span></div>`;
+        return `<div class="mb-1.5 flex gap-2 text-[10px]"><span style="color: var(--text-muted); shrink-0">[${time}]</span> <span class="font-semibold shrink-0" style="color: var(--text-main);">${d.symbol}</span> <span class="shrink-0 font-semibold" style="${colorStyle}">${d.action}</span> <span class="truncate" style="color: var(--text-muted);">${String(d.reason || '').length > 55 ? String(d.reason).substring(0, 55) + '...' : String(d.reason || '')}</span></div>`;
     }).join('');
   }
 
@@ -903,7 +962,6 @@ async function load(){
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    applyTheme(currentThemeIndex);
     setTimeout(() => { try { if (window.LightweightCharts) initTVChart(); } catch (e) { console.error(e); } try { if (window.Chart) initCharts(); } catch (e) { console.error(e); } }, 200);
     loadLiveTickers();
     load(); 
