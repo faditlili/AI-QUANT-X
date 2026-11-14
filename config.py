@@ -26,11 +26,14 @@ FUTURES_TICKER_24H_PATH = "/fapi/v1/ticker/24hr"
 SPOT_PRICE_PATH = "/api/v3/ticker/price"
 FUTURES_PRICE_PATH = "/fapi/v1/ticker/price"
 
+# --- القائمة النخبة: أفضل 30 عملة (تم تحديثها بناءً على تعديلات Binance) ---
 SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "SYMBOLS", 
     "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,DOTUSDT,LINKUSDT,"
     "POLUSDT,TONUSDT,SHIBUSDT,LTCUSDT,BCHUSDT,UNIUSDT,NEARUSDT,APTUSDT,ICPUSDT,SUIUSDT,"
-    "ARBUSDT,OPUSDT,INJUSDT,ATOMUSDT,FILUSDT,STXUSDT,IMXUSDT,RENDERUSDT,FETUSDT,WLDUSDT"
+    "ARBUSDT,OPUSDT,INJUSDT,ATOMUSDT,FILUSDT,STXUSDT,IMXUSDT,RENDERUSDT,FETUSDT,WLDUSDT,"
+    "TRXUSDT,ETCUSDT,XLMUSDT,HBARUSDT,AAVEUSDT,ALGOUSDT,VETUSDT,CRVUSDT,LDOUSDT,SEIUSDT,"
+    "TIAUSDT,RUNEUSDT,GALAUSDT,SANDUSDT,MANAUSDT,AXSUSDT,ENAUSDT,ONDOUSDT,PEPEUSDT,1000PEPEUSDT"
 ).split(",") if s.strip())
 
 MARKET_SOURCES = ("spot", "futures")
@@ -40,7 +43,7 @@ PRIMARY_TIMEFRAME = "1h"
 KLINE_LIMIT = 200
 MIN_CANDLES_REQUIRED = 60
 MIN_24H_VOLUME_USDT = float(os.getenv("MIN_24H_VOLUME_USDT", "5000000"))
-MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "30"))
+MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "50"))
 EXCLUDED_SYMBOLS = set()
 EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
@@ -48,13 +51,19 @@ SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
 MAX_SCAN_DURATION_SECONDS = 150
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
+CORRELATION_MAX = 0.92   # أقصى ارتباط مسموح بين صفقتين مفتوحتين (0.85 أشد، 0.98 شبه معطّل)
+PAIR_LOCK_AFTER_STOPLOSS_MIN = 120   # بعد خسارة بوقف الخسارة: لا نعيد فتح العملة نفسها لهذه المدة بالدقائق (0 = معطّل)
+USE_BTC_COMPASS = True     # بوصلة BTC/ETH (إطار الساعة): لا نشتري عندما يهبطان معاً ولا نبيع عندما يصعدان معاً (للعملات الأخرى فقط)
+USE_ROLLING_VWAP = True    # VWAP لآخر 24 ساعة بدل 8 أيام (False = السلوك القديم)
+STRICT_HTF_CONFIRM = False # False: يكفي ألا يعاكس إطار 4 ساعات الصفقة. True = السلوك القديم (يجب أن يوافقها)
+MAX_SAME_SIDE = 3        # أقصى عدد صفقات مفتوحة في الاتجاه نفسه (شراء أو بيع). ضع 5 لتعطيله
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
 # Strategy layer
 STRATEGIES = tuple(s.strip() for s in os.getenv(
-    "STRATEGIES", "trend,mean_reversion,breakout,dip_buyer").split(",") if s.strip())
+    "STRATEGIES", "trend,mean_reversion,breakout").split(",") if s.strip())
 HIGH_VOL_PERCENTILE = 95
 TREND_ADX_MIN = 22
 RANGE_ADX_MAX = 20
@@ -62,39 +71,38 @@ RANGE_ADX_MAX = 20
 # Trade management
 TRAILING_ENABLED = os.getenv("TRAILING_ENABLED", "true").lower() == "true"
 BREAKEVEN_AT_R = 1.0
-TRAIL_START_R = 2.0
-TRAIL_DISTANCE_R = 0.8
+TRAIL_START_R = 1.5
+TRAIL_DISTANCE_R = 1.0
 
 # Portfolio protection
 MAX_CONSECUTIVE_LOSSES = 4
 LOSS_STREAK_PAUSE_SECONDS = 6 * 3600
-MAX_DRAWDOWN_PCT = 15.0 # إيقاف كلي إذا وصلت الخسارة إلى 15%
+MAX_DRAWDOWN_PCT = 15.0
 DRAWDOWN_PAUSE_SECONDS = 24 * 3600
 
-# --- الوضع الهجومي: إدارة الحرارة (Institutional Heat Management) ---
-MAX_DIRECTIONAL_HEAT_PCT = 10.0  # أقصى خسارة مسموحة في اتجاه واحد (شراء أو بيع) = 10%
-MAX_TOTAL_HEAT_PCT = 20.0        # أقصى خسارة مسموحة لجميع الصفقات = 20%
-
+# Backtest
 BACKTEST_CANDLES = int(os.getenv("BACKTEST_CANDLES", "2000"))
 BACKTEST_INTERVAL = "1h"
 
+# Dashboard protection (empty = open)
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = 2.0   # <--- رفعنا المخاطرة لكل صفقة إلى 2% (4 دولارات) لكي نصل إلى 10%
-MAX_PORTFOLIO_RISK_PCT = 15.0 # رفعنا السقف العام
-MAX_ALLOCATION_PCT = 100.0
-DAILY_LOSS_LIMIT_PCT = 5.0 # رفعنا حد الخسارة اليومي إلى 5%
+RISK_PER_TRADE_PCT = 1.0     # مخاطرة 1% (2 دولار)
+MAX_PORTFOLIO_RISK_PCT = 10.0
+MAX_ALLOCATION_PCT = 25.0    # سقف الصفقة 25% من الرصيد: تتسع 4 صفقات معاً (تنويع أكبر وصفقات أكثر)
+DAILY_LOSS_LIMIT_PCT = 3.0
 
-FEE_RATE = 0.0004
-FEE_RATE_SPOT = 0.001
+# Fees
+FEE_RATE = 0.0004            # عمولة الفيوتشرز
+FEE_RATE_SPOT = 0.001        # عمولة السبوت
 
 def fee_rate(source):
     return FEE_RATE if source == "futures" else FEE_RATE_SPOT
 
 SLIPPAGE_BPS = 5.0
 ATR_STOP_MULTIPLIER = 2.0
-MIN_TARGET_PCT = 0.5
+MIN_TARGET_PCT = 0.5         # <--- تم التعديل إلى 0.5% لكي لا يرفض البوت الصفقات
 REWARD_RISK_RATIO = 2.0
 MAX_NEWS_RISK = 0.70
 
@@ -113,6 +121,7 @@ HTTP_RETRY_ATTEMPTS = 2
 USER_AGENT = "AI-QUANT-X-Paper/4.1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# --- Advanced Filters ---
 USE_FUNDING_RATE_FILTER = True
 MAX_LONG_FUNDING_RATE = 0.0005
 MIN_SHORT_FUNDING_RATE = -0.0005
@@ -122,7 +131,7 @@ LONDON_OPEN = 7
 NEW_YORK_OPEN = 12
 SESSION_END = 21
 
-SCALE_OUT_ENABLED = False
+SCALE_OUT_ENABLED = True
 SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
@@ -131,8 +140,8 @@ def validate_config():
         raise RuntimeError("This build is paper-simulation only.")
     if not SYMBOLS:
         raise ValueError("SYMBOLS cannot be empty.")
-    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 20: # عدلنا هذا الشرط لكي يسمح بـ 15%
-        raise ValueError("Aggregate portfolio risk must be in (0, 20].")
+    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 10:
+        raise ValueError("Aggregate portfolio risk must be in (0, 10].")
     if not 0 < RISK_PER_TRADE_PCT <= MAX_PORTFOLIO_RISK_PCT:
         raise ValueError("Invalid per-position risk.")
     if not 0 < MAX_ALLOCATION_PCT <= 100:
