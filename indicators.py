@@ -1,10 +1,39 @@
 """Technical indicators (vectorised) with input validation."""
+import threading
 import numpy as np
 import pandas as pd
 import config
 
 class IndicatorError(ValueError):
     pass
+
+# Thread-local parameter override. Used by the Auto-Tune worker thread so the live
+# engine (another thread / the event loop) never sees experimental values.
+_override = threading.local()
+
+class param_override:
+    def __init__(self, rsi=None, ema_fast=None):
+        self.rsi = rsi
+        self.ema_fast = ema_fast
+        self._prev = None
+
+    def __enter__(self):
+        self._prev = (getattr(_override, "rsi", None), getattr(_override, "ema_fast", None))
+        _override.rsi = self.rsi
+        _override.ema_fast = self.ema_fast
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        _override.rsi, _override.ema_fast = self._prev
+        return False
+
+def _rsi_period():
+    v = getattr(_override, "rsi", None)
+    return config.RSI_PERIOD if v is None else int(v)
+
+def _ema_fast():
+    v = getattr(_override, "ema_fast", None)
+    return config.EMA_FAST if v is None else int(v)
 
 def _clean(frame):
     if isinstance(frame, pd.DataFrame):
@@ -33,13 +62,14 @@ def compute_frame(frame):
     df = _clean(frame)
     close, high, low = df.close, df.high, df.low
     
-    df["ema9"] = close.ewm(span=config.EMA_FAST, adjust=False).mean()
+    rsi_period = _rsi_period()
+    df["ema9"] = close.ewm(span=_ema_fast(), adjust=False).mean()
     df["ema21"] = close.ewm(span=config.EMA_MEDIUM, adjust=False).mean()
     df["ema50"] = close.ewm(span=config.EMA_SLOW, adjust=False).mean()
 
     delta = close.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1/config.RSI_PERIOD, adjust=False, min_periods=config.RSI_PERIOD).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1/config.RSI_PERIOD, adjust=False, min_periods=config.RSI_PERIOD).mean()
+    gain = delta.clip(lower=0).ewm(alpha=1/rsi_period, adjust=False, min_periods=rsi_period).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1/rsi_period, adjust=False, min_periods=rsi_period).mean()
     rs = gain / loss.replace(0, np.nan)
     rsi = 100 - 100/(1+rs)
     rsi = rsi.mask((loss == 0) & (gain > 0), 100).mask((gain == 0) & (loss > 0), 0).fillna(50)
