@@ -100,7 +100,7 @@ class DipBuyerStrategy:
 REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy(), DipBuyerStrategy())}
 
 def _side_filters(name, cand, ctx):
-    """Return (hard, soft). Hard = risk vetoes. Soft = confluence checks that cost points."""
+    """Return (hard, soft)."""
     p = ctx["primary"]
     is_long = cand["side"] == "LONG"
     hard, soft = [], []
@@ -120,7 +120,15 @@ def _side_filters(name, cand, ctx):
         if against:
             (soft if name == "dip_buyer" else hard).append("BTC/ETH trend opposes")
 
-    # SOFT: VWAP and order flow (only for trend-following strategies)
+    # HARD 3: Machine Learning Filter
+    if getattr(config, "USE_ML_FILTER", False):
+        ml_prob = ctx.get("ml_prob", 0.5)
+        if is_long and ml_prob < config.ML_CONFIDENCE_THRESHOLD:
+            hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
+        elif (not is_long) and ml_prob > config.ML_NEUTRAL_THRESHOLD:
+            hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
+
+    # SOFT: VWAP and order flow
     if name in TREND_FOLLOWERS:
         vwap = _vwap(ctx)
         if vwap is not None:
@@ -130,7 +138,7 @@ def _side_filters(name, cand, ctx):
         if is_long and taker < config.TAKER_LONG_MIN: soft.append(f"Weak Takers ({taker:.2f})")
         if (not is_long) and taker > config.TAKER_SHORT_MAX: soft.append(f"Strong Takers ({taker:.2f})")
 
-    # SOFT: market sentiment and breadth (not applied to dip_buyer)
+    # SOFT: market sentiment and breadth
     if name != "dip_buyer":
         fng = ctx.get("fear_greed", 50)
         breadth = ctx.get("breadth", 50.0)
@@ -141,7 +149,7 @@ def _side_filters(name, cand, ctx):
             if fng < config.FEAR_GREED_MIN_SHORT: soft.append("Extreme Fear")
             if breadth > config.BREADTH_MAX_SHORT: soft.append("Strong Breadth")
 
-    # SOFT: Order Book Liquidity Walls (الفلتر الذي أضفناه)
+    # SOFT: Order Book Liquidity Walls
     if getattr(config, "USE_ORDER_BOOK_FILTER", False):
         ob = ctx.get("order_book", {})
         if is_long and ob.get("resistance_strength") == "STRONG":
@@ -198,7 +206,6 @@ def select_signal(ctx, enabled=None):
         confirmed = not blockers
         shown = blockers + [x for x in soft if x not in blockers]
         
-        # تعديل بسيط ليتوافق مع decision_engine
         tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
         if blockers:
             tech["blocked_reason"] = " | ".join(blockers)
