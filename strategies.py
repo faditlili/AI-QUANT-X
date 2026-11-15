@@ -137,6 +137,15 @@ def _side_filters(name, cand, ctx):
         elif (not is_long) and sent_score >= config.SENTIMENT_BULLISH_BLOCK:
             hard.append(f"News is too Bullish ({sent_score:.2f})")
 
+    # HARD 5: Volume Anomaly (Whale)
+    if getattr(config, "USE_VOLUME_ANOMALY_FILTER", True):
+        anomaly = ctx.get("vol_anomaly", {})
+        if anomaly.get("anomaly") and anomaly.get("intensity") in ("HIGH", "EXTREME"):
+            if is_long and anomaly.get("direction") == "SELLING_WHALE":
+                hard.append(f"Selling Whale detected (Z: {anomaly.get('z_score')})")
+            elif (not is_long) and anomaly.get("direction") == "BUYING_WHALE":
+                hard.append(f"Buying Whale detected (Z: {anomaly.get('z_score')})")
+
     # SOFT: VWAP and order flow
     if name in TREND_FOLLOWERS:
         vwap = _vwap(ctx)
