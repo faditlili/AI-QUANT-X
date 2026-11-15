@@ -155,3 +155,7 @@ def validate_config():
     if not 0 < MAX_ALLOCATION_PCT <= 100: raise ValueError("Invalid allocation cap.")
     if DB_PATH == ":memory:": return True
     return True
+    # --- Machine Learning Filter ---
+USE_ML_FILTER = True
+ML_CONFIDENCE_THRESHOLD = 0.55  # إذا كان الاحتمال أقل من 55% للشراء، ارفض الصفقة
+ML_NEUTRAL_THRESHOLD = 0.45     # إذا كان الاحتمال أكبر من 45% للبيع، ارفض الصفقة
