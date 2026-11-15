@@ -1,13 +1,19 @@
-# ml_filter.py
-#
-# Add these lines to requirements.txt (pandas and numpy are usually already there):
-#     scikit-learn
-#     joblib
-#
-# Note for Railway: the local file system is wiped on every redeploy, so model.pkl
-# is lost after a redeploy. Call train_model(df) again after each deploy.
+"""Machine-learning filter.
 
+The model predicts whether price will be higher HORIZON candles from now, using only
+scale-free features (ratios, oscillators), so one model can be applied to any symbol.
+It is trained on several symbols and validated on a held-out, later time window.
+If the held-out accuracy does not beat the naive baseline, the model is marked invalid
+and get_ml_probability() returns None, which means "no opinion": the filter stays out
+of the way instead of blocking trades with noise.
+"""
+import logging
 import os
+import time
+
+import config
+
+log = logging.getLogger(__name__)
 
 try:
     import joblib
@@ -18,106 +24,140 @@ try:
 except ImportError:
     ML_AVAILABLE = False
 
-MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pkl")
-NEUTRAL_PROBABILITY = 0.5
-MIN_TRAIN_ROWS = 100
+FEATURES = (
+    "rsi", "adx", "di_diff", "volume_ratio", "zscore", "bb_width", "bb_width_pctile",
+    "atr_pctile", "taker_buy_ratio", "ema_fast_gap", "ema_slow_gap", "price_ema50_gap",
+    "price_vwap_gap", "atr_pct", "channel_pos",
+)
+_REQUIRED = ("close", "rsi", "adx", "plus_di", "minus_di", "volume_ratio", "zscore", "bb_width",
+             "bb_width_pctile", "atr_pctile", "taker_buy_ratio", "ema9", "ema21", "ema50",
+             "vwap24", "atr", "swing_high", "swing_low")
+MIN_TRAIN_ROWS = 300
 TEST_FRACTION = 0.2
-
-# Raw price/time columns are not used as features (they are not stationary).
-EXCLUDED_COLUMNS = {
-    "open", "high", "low", "close", "volume",
-    "timestamp", "time", "open_time", "close_time", "date", "datetime",
-    "target",
-}
-
 _cache = {"mtime": None, "bundle": None}
+_path_cache = {"path": None}
+
+
+def _model_path():
+    if _path_cache["path"]:
+        return _path_cache["path"]
+    path = config.ML_MODEL_PATH
+    try:
+        folder = os.path.dirname(path) or "."
+        os.makedirs(folder, exist_ok=True)
+        probe = os.path.join(folder, ".ml_write_test")
+        with open(probe, "w") as handle:
+            handle.write("ok")
+        os.remove(probe)
+    except OSError:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pkl")
+    _path_cache["path"] = path
+    return path
+
+
+def feature_frame(df):
+    """Scale-free features from an indicator frame (output of indicators.compute_frame)."""
+    close = df["close"]
+    rng = (df["swing_high"] - df["swing_low"]).where(lambda s: s > 0)
+    out = pd.DataFrame(index=df.index)
+    out["rsi"] = df["rsi"]
+    out["adx"] = df["adx"]
+    out["di_diff"] = df["plus_di"] - df["minus_di"]
+    out["volume_ratio"] = df["volume_ratio"].clip(0, 10)
+    out["zscore"] = df["zscore"].clip(-5, 5)
+    out["bb_width"] = df["bb_width"]
+    out["bb_width_pctile"] = df["bb_width_pctile"]
+    out["atr_pctile"] = df["atr_pctile"]
+    out["taker_buy_ratio"] = df["taker_buy_ratio"]
+    out["ema_fast_gap"] = df["ema9"] / df["ema21"] - 1.0
+    out["ema_slow_gap"] = df["ema21"] / df["ema50"] - 1.0
+    out["price_ema50_gap"] = close / df["ema50"] - 1.0
+    out["price_vwap_gap"] = close / df["vwap24"] - 1.0
+    out["atr_pct"] = df["atr"] / close
+    out["channel_pos"] = ((close - df["swing_low"]) / rng).clip(-1, 2).fillna(0.5)
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def _frame_from_snapshot(snap):
+    row = {}
+    for key in _REQUIRED:
+        if key == "close":
+            row[key] = snap.get("price", snap.get("close"))
+        else:
+            row[key] = snap.get(key)
+    return pd.DataFrame([row]).astype(float)
 
 
 def _build_model():
-    return GradientBoostingClassifier(
-        n_estimators=150,
-        max_depth=3,
-        learning_rate=0.05,
-        subsample=0.8,
-        random_state=42,
-    )
+    return GradientBoostingClassifier(n_estimators=120, max_depth=3, learning_rate=0.05,
+                                      subsample=0.8, random_state=42)
 
 
-def train_model(df):
-    """Train a model to predict the next candle (1 = up, 0 = down) and save it to model.pkl.
-
-    df: DataFrame with OHLCV columns ("close" is required) plus indicator columns
-    (RSI, EMA, ATR, ...). Rows must be in chronological order.
-    Returns True if the model was trained and saved, otherwise False.
-    """
+def train_model(frames):
+    """Train on one indicator frame or a list of them. Returns a summary dict, or None on failure."""
     if not ML_AVAILABLE:
-        print("[ML] scikit-learn / joblib not installed")
-        return False
-
+        log.warning("[ML] scikit-learn / joblib not installed")
+        return None
     try:
-        if df is None or "close" not in df.columns:
-            print("[ML] DataFrame is missing the close column")
-            return False
+        if isinstance(frames, pd.DataFrame):
+            frames = [frames]
+        horizon = max(1, int(config.ML_HORIZON_CANDLES))
+        train_parts, test_parts = [], []
+        for frame in frames:
+            if frame is None or any(col not in frame.columns for col in _REQUIRED):
+                continue
+            feats = feature_frame(frame)
+            fwd = frame["close"].shift(-horizon) / frame["close"] - 1.0
+            data = feats.copy()
+            data["y"] = (fwd > 0).astype(int)
+            data = data[fwd.notna()].dropna()
+            if len(data) < MIN_TRAIN_ROWS:
+                continue
+            cut = int(len(data) * (1.0 - TEST_FRACTION))
+            train_parts.append(data.iloc[:max(0, cut - horizon)])  # embargo: no label overlap
+            test_parts.append(data.iloc[cut:])
+        if not train_parts:
+            log.warning("[ML] not enough data to train")
+            return None
+        train = pd.concat(train_parts)
+        test = pd.concat(test_parts)
+        if train["y"].nunique() < 2 or test.empty:
+            log.warning("[ML] target has a single class")
+            return None
 
-        data = df.copy()
-        data["target"] = (data["close"].shift(-1) > data["close"]).astype(int)
-        data = data.iloc[:-1]  # the last row has no next candle
+        check = _build_model()
+        check.fit(train[list(FEATURES)], train["y"])
+        accuracy = float(check.score(test[list(FEATURES)], test["y"]))
+        up_rate = float(test["y"].mean())
+        baseline = max(up_rate, 1.0 - up_rate)
+        valid = accuracy >= config.ML_MIN_ACCURACY and accuracy >= baseline + 0.01
 
-        feature_columns = [
-            col for col in data.columns
-            if col not in EXCLUDED_COLUMNS and pd.api.types.is_numeric_dtype(data[col])
-        ]
-        if not feature_columns:
-            print("[ML] no indicator columns found to use as features")
-            return False
-
-        data = data[feature_columns + ["target"]]
-        data = data.replace([np.inf, -np.inf], np.nan).dropna()
-
-        if len(data) < MIN_TRAIN_ROWS:
-            print("[ML] not enough rows to train: " + str(len(data)))
-            return False
-        if data["target"].nunique() < 2:
-            print("[ML] target has only one class, cannot train")
-            return False
-
-        x = data[feature_columns]
-        y = data["target"]
-
-        # Time-ordered split (no shuffling) to get an honest accuracy estimate.
-        split_index = int(len(data) * (1.0 - TEST_FRACTION))
-        x_train, x_test = x.iloc[:split_index], x.iloc[split_index:]
-        y_train, y_test = y.iloc[:split_index], y.iloc[split_index:]
-
-        if y_train.nunique() >= 2 and len(x_test) > 0:
-            check_model = _build_model()
-            check_model.fit(x_train, y_train)
-            accuracy = check_model.score(x_test, y_test)
-            print("[ML] out-of-sample accuracy: " + str(round(accuracy, 4)))
-
-        # Final model is trained on all available data.
+        full = pd.concat([train, test])
         model = _build_model()
-        model.fit(x, y)
-
-        joblib.dump({"model": model, "features": feature_columns}, MODEL_PATH)
+        model.fit(full[list(FEATURES)], full["y"])
+        bundle = {"model": model, "features": list(FEATURES), "valid": bool(valid),
+                  "accuracy": accuracy, "baseline": baseline, "rows": int(len(full)),
+                  "trained_at": time.time()}
+        joblib.dump(bundle, _model_path())
         _cache["mtime"] = None
         _cache["bundle"] = None
-        print("[ML] model saved to " + MODEL_PATH)
-        return True
+        log.info("[ML] trained on %d rows | holdout accuracy %.3f | baseline %.3f | %s",
+                 len(full), accuracy, baseline, "ACTIVE" if valid else "INACTIVE (no proven edge)")
+        return {"valid": bool(valid), "accuracy": accuracy, "baseline": baseline, "rows": int(len(full))}
     except Exception as error:
-        print("[ML] training failed: " + str(error))
-        return False
+        log.exception("[ML] training failed: %s", error)
+        return None
 
 
 def _load_bundle():
-    """Load the saved model (cached until the file changes). Returns None if unavailable."""
-    if not ML_AVAILABLE or not os.path.exists(MODEL_PATH):
+    path = _model_path()
+    if not ML_AVAILABLE or not os.path.exists(path):
         return None
     try:
-        mtime = os.path.getmtime(MODEL_PATH)
+        mtime = os.path.getmtime(path)
         if _cache["bundle"] is not None and _cache["mtime"] == mtime:
             return _cache["bundle"]
-        bundle = joblib.load(MODEL_PATH)
+        bundle = joblib.load(path)
         _cache["mtime"] = mtime
         _cache["bundle"] = bundle
         return bundle
@@ -125,39 +165,34 @@ def _load_bundle():
         return None
 
 
-def get_ml_probability(current_indicators):
-    """Return the probability (0 to 1) that the next candle is up.
+def model_age_seconds():
+    """Age of the saved model in seconds, or None if there is no model file."""
+    path = _model_path()
+    try:
+        return max(0.0, time.time() - os.path.getmtime(path))
+    except OSError:
+        return None
 
-    current_indicators: dict of the current indicator values.
-    Returns 0.5 (neutral) if no trained model exists or anything goes wrong.
+
+def get_ml_probability(current_indicators):
+    """Probability (0..1) that price is higher in HORIZON candles.
+
+    Returns None (no opinion) when there is no model, the model has no proven edge,
+    or anything goes wrong. Callers must treat None as "do not filter".
     """
     try:
         bundle = _load_bundle()
-        if bundle is None or not isinstance(current_indicators, dict):
-            return NEUTRAL_PROBABILITY
-
+        if bundle is None or not bundle.get("valid") or not isinstance(current_indicators, dict):
+            return None
+        frame = _frame_from_snapshot(current_indicators)
+        feats = feature_frame(frame)[bundle["features"]]
+        if feats.isna().any(axis=None):
+            return None
         model = bundle["model"]
-        features = bundle["features"]
-
-        row = {}
-        for name in features:
-            value = current_indicators.get(name, 0.0)
-            try:
-                value = float(value)
-            except (TypeError, ValueError):
-                value = 0.0
-            if value != value or value in (float("inf"), float("-inf")):
-                value = 0.0
-            row[name] = value
-
-        frame = pd.DataFrame([row], columns=features)
-        probabilities = model.predict_proba(frame)[0]
-
         classes = list(model.classes_)
         if 1 not in classes:
-            return NEUTRAL_PROBABILITY
-        probability_up = float(probabilities[classes.index(1)])
-
-        return min(1.0, max(0.0, probability_up))
+            return None
+        probability = float(model.predict_proba(feats)[0][classes.index(1)])
+        return min(1.0, max(0.0, probability))
     except Exception:
-        return NEUTRAL_PROBABILITY
+        return None
