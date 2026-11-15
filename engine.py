@@ -1,9 +1,10 @@
-"""Asynchronous paper-simulation engine with AI/ML."""
+"""Asynchronous paper-simulation engine with AI/ML and WebSockets."""
 import asyncio, logging, time, os
 import datetime
 import config
 from order_book import get_order_book_imbalance
 from ml_filter import train_model, get_ml_probability
+from websocket_streamer import start_price_stream, get_live_price
 from market_data import MarketData
 from indicators import calculate_indicators, direction, compute_frame
 from strategies import select_signal
@@ -19,7 +20,7 @@ class Engine:
         self.db=database; self.market=market or MarketData()
         self.risk=RiskManager(database); self.trader=PaperTrader(database,self.risk)
         self.news=news or NewsEngine()
-        self.running=False; self.task=None; self.monitor_task=None; self.last_scan=None; self.last_error=None
+        self.running=False; self.task=None; self.monitor_task=None; self.ws_task=None; self.last_scan=None; self.last_error=None
         self.paused=self.db.get_state("paused","0")=="1"
         self.notifier=None
         self.compass={}
@@ -28,7 +29,11 @@ class Engine:
         await self.market.start()
         await self.news.start()
         
-        # --- تحميل الإعدادات والاستراتيجية الأفضل ---
+        # 1. تشغيل البث المباشر للأسعار (WebSockets) في الخلفية
+        log.info("Starting WebSocket Price Stream...")
+        self.ws_task = asyncio.create_task(start_price_stream())
+        
+        # 2. تحميل الإعدادات والاستراتيجية الأفضل
         saved_rsi = self.db.get_state("auto_rsi")
         saved_ema = self.db.get_state("auto_ema")
         saved_strategy = self.db.get_state("auto_strategy")
@@ -40,7 +45,7 @@ class Engine:
             config.STRATEGIES = (saved_strategy,)
             log.info(f"Auto-Tune Active: Using strategy '{saved_strategy}' with RSI {saved_rsi} & EMA {saved_ema}")
             
-        # --- تدريب الذكاء الاصطناعي عند بدء التشغيل (إذا لم يكن موجوداً) ---
+        # 3. تدريب الذكاء الاصطناعي عند بدء التشغيل (إذا لم يكن موجوداً)
         if getattr(config, "USE_ML_FILTER", False):
             model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pkl")
             if not os.path.exists(model_path):
@@ -60,7 +65,7 @@ class Engine:
 
     async def stop(self):
         self.running=False
-        for task in (self.task,self.monitor_task):
+        for task in (self.task, self.monitor_task, self.ws_task):
             if task:
                 task.cancel()
                 try: await task
@@ -149,11 +154,35 @@ class Engine:
             if self.notifier: await self.notifier.notify_trade_opened(opened["position"])
 
     async def monitor_positions(self):
-        sources={p["source"] for p in self.db.get_open_positions()}
-        for source in sources:
-            prices=await self.market.get_last_prices(source)
-            for closed in self.trader.update_market_prices(prices,source):
-                if closed and self.notifier: await self.notifier.notify_trade_closed(closed)
+        """مراقبة الصفقات المفتوحة باستخدام الأسعار اللحظية (WebSocket)"""
+        open_positions = self.db.get_open_positions()
+        if not open_positions: return
+        
+        prices_by_source = {}
+        for p in open_positions:
+            symbol = p["symbol"]
+            source = p["source"]
+            
+            # القراءة من الذاكرة الفورية (0.01 ثانية)
+            live_price = get_live_price(symbol)
+            
+            # إذا لم يصل السعر بعد (عند بدء التشغيل)، نجلب السعر من REST API كاحتياط
+            if not live_price:
+                try:
+                    res = await self.market.get_last_prices(source)
+                    live_price = res.get(symbol, {}).get("last_price")
+                except Exception:
+                    pass
+                    
+            if live_price:
+                if source not in prices_by_source:
+                    prices_by_source[source] = {}
+                prices_by_source[source][symbol] = {"last_price": live_price}
+
+        for source, prices in prices_by_source.items():
+            for closed in self.trader.update_market_prices(prices, source):
+                if closed and self.notifier: 
+                    await self.notifier.notify_trade_closed(closed)
 
     async def _monitor_loop(self):
         while self.running:
