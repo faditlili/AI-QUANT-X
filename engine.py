@@ -1,4 +1,4 @@
-"""Asynchronous paper-simulation engine with AI, ML, WebSockets, and Sentiment."""
+"""Asynchronous paper-simulation engine with AI, ML, WebSockets, Sentiment, and Dynamic Symbols."""
 import asyncio, logging, time, os
 import datetime
 import config
@@ -6,6 +6,7 @@ from order_book import get_order_book_imbalance
 from ml_filter import train_model, get_ml_probability
 from websocket_streamer import start_price_stream, get_live_price
 from sentiment_engine import get_market_sentiment
+from symbol_scanner import get_top_symbols
 from market_data import MarketData
 from indicators import calculate_indicators, direction, compute_frame
 from strategies import select_signal
@@ -25,6 +26,7 @@ class Engine:
         self.paused=self.db.get_state("paused","0")=="1"
         self.notifier=None
         self.compass={}
+        self.last_symbol_update = 0 # <--- تتبع وقت تحديث العملات
 
     async def start(self):
         await self.market.start()
@@ -186,6 +188,19 @@ class Engine:
 
     async def scan_once(self):
         self.last_scan=time.time()
+        
+        # --- تحديث قائمة العملات ديناميكياً كل 12 ساعة ---
+        if time.time() - self.last_symbol_update > 43200: # 12 ساعة
+            try:
+                new_symbols = await get_top_symbols()
+                if new_symbols:
+                    config.SYMBOLS = tuple(new_symbols)
+                    self.last_symbol_update = time.time()
+                    log.info(f"Dynamic Scanner: Updated watchlist to {len(config.SYMBOLS)} top movers.")
+            except Exception as e:
+                log.error(f"Failed to update symbols: {e}")
+        # -------------------------------------------------
+
         fng = await self.market.get_fear_and_greed()
         
         for source in config.MARKET_SOURCES:
