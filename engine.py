@@ -1,10 +1,11 @@
-"""Asynchronous paper-simulation engine."""
-import asyncio, logging, time
+"""Asynchronous paper-simulation engine with AI/ML."""
+import asyncio, logging, time, os
 import datetime
 import config
 from order_book import get_order_book_imbalance
+from ml_filter import train_model, get_ml_probability
 from market_data import MarketData
-from indicators import calculate_indicators, direction
+from indicators import calculate_indicators, direction, compute_frame
 from strategies import select_signal
 from risk_manager import RiskManager
 from paper_trading import PaperTrader
@@ -38,8 +39,21 @@ class Engine:
         if saved_strategy:
             config.STRATEGIES = (saved_strategy,)
             log.info(f"Auto-Tune Active: Using strategy '{saved_strategy}' with RSI {saved_rsi} & EMA {saved_ema}")
-        # ---------------------------------------------
-        
+            
+        # --- تدريب الذكاء الاصطناعي عند بدء التشغيل (إذا لم يكن موجوداً) ---
+        if getattr(config, "USE_ML_FILTER", False):
+            model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pkl")
+            if not os.path.exists(model_path):
+                log.info("ML Model not found. Fetching history to train...")
+                try:
+                    df = await self.market.fetch_history("BTCUSDT", "1h", "futures", 2000)
+                    if not df.empty:
+                        df_ind = compute_frame(df)
+                        await asyncio.to_thread(train_model, df_ind)
+                except Exception as e:
+                    log.error(f"Failed to train ML model on startup: {e}")
+        # -----------------------------------------------------------------
+
         self.running=True
         if self.task is None or self.task.done(): self.task=asyncio.create_task(self._run())
         if self.monitor_task is None or self.monitor_task.done(): self.monitor_task=asyncio.create_task(self._monitor_loop())
@@ -88,13 +102,18 @@ class Engine:
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         
-        # --- السطر الجديد: جلب بيانات دفتر الأوامر ---
+        # جلب بيانات دفتر الأوامر
         ob_data = await get_order_book_imbalance(symbol, session=self.market.session)
+        
+        # جلب احتمال الذكاء الاصطناعي
+        ml_prob = 0.5
+        if getattr(config, "USE_ML_FILTER", False):
+            ml_prob = get_ml_probability(primary)
         
         ctx={"source":source,"symbol":symbol,"compass":macro_ctx.get("compass"),"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
              "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour,
-             "order_book": ob_data} # <--- السطر الجديد: تمرير البيانات للاستراتيجية
+             "order_book": ob_data, "ml_prob": ml_prob}
              
         result=select_signal(ctx)
         
@@ -119,7 +138,7 @@ class Engine:
                 return
         
         opened=self.trader.open_position(symbol,primary["price"],primary["atr"],result["side"],source,
-                 {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"]},
+                 {"score":result["score"],"timeframes":dirs,"regime":result["regime"],"atr":primary["atr"], "ml_prob": ml_prob},
                  stop_mult=result["stop_mult"],rr=result["rr"],strategy=result["strategy"])
                  
         if not opened.get("success") and opened.get("reason")!="Duplicate open position":
