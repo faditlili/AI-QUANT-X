@@ -290,16 +290,19 @@ table.tbl{width:100%;min-width:520px;border-collapse:separate;border-spacing:0 6
       <div class="grid grid-cols-3 gap-2 mt-4">
         <div class="stat"><div class="k">CASH</div><div class="v" id="st-cash">0.00</div></div>
         <div class="stat"><div class="k">FLOATING</div><div class="v" id="st-unreal">0.00</div></div>
-        <div class="stat"><div class="k">REALIZED</div><div class="v" id="st-real">0.00</div></div>
+        <!-- التعديل: تغيير REALIZED إلى MARGIN -->
+        <div class="stat"><div class="k">MARGIN</div><div class="v" id="st-real">0.00</div></div>
       </div>
       <div class="mt-4">
         <div class="flex items-center justify-between mb-2">
           <span class="label"><i data-lucide="shield"></i>Risk Heat</span>
-          <span class="mono muted" style="font-size:11px" id="heat-txt">0.00 / 0.00</span>
+          <span class="mono muted" style="font-size:11px" id="heat-txt">0.00 / 0.00 (MAX)</span>
         </div>
         <div class="bar" id="heat-bar"><i id="heat-fill"></i></div>
         <div class="flex items-center justify-between mt-2 mono" style="font-size:11px">
-          <span class="muted">DAILY P&amp;L</span><span id="daily-txt">0.00</span>
+          <!-- التعديل: توضيح أن الخسارة يومية -->
+          <span class="muted" title="الربح أو الخسارة منذ بداية اليوم (UTC) وليس من بداية الحساب">TODAY'S P&amp;L</span>
+          <span id="daily-txt">0.00</span>
         </div>
       </div>
     </div>
@@ -594,15 +597,23 @@ function renderBalance(p, rk) {
 
   setText($('st-cash'), fmt(p.cash_balance));
   const un = $('st-unreal'); setText(un, fmtSigned(p.unrealized_pnl)); un.className = 'v ' + cls(p.unrealized_pnl);
-  const re = $('st-real'); setText(re, fmtSigned(p.realized_pnl)); re.className = 'v ' + cls(p.realized_pnl);
+  
+  // التعديل: عرض الهامش (Margin) بدلاً من الأرباح المحققة (Realized)
+  const re = $('st-real'); setText(re, fmt(p.open_margin)); re.className = 'v muted';
 
   if (rk) {
     const cap = num(rk.risk_cap), used = num(rk.open_risk);
     const ratio = cap > 0 ? Math.min(100, used / cap * 100) : 0;
     $('heat-fill').style.width = ratio.toFixed(1) + '%';
     $('heat-bar').className = 'bar' + (ratio > 70 ? ' hot' : '');
-    setText($('heat-txt'), fmt(used) + ' / ' + fmt(cap) + ' USDT');
-    const dc = $('daily-txt'); setText(dc, fmtSigned(rk.daily_change) + ' USDT' + (rk.daily_limit_hit ? '  LIMIT HIT' : '')); dc.className = cls(rk.daily_change);
+    
+    // التعديل: توضيح أن الرقم الثاني هو الحد الأقصى (MAX)
+    setText($('heat-txt'), fmt(used) + ' / ' + fmt(cap) + ' (MAX)');
+    
+    const dc = $('daily-txt'); 
+    // التعديل: توضيح تفعيل حد الخسارة اليومي
+    setText(dc, fmtSigned(rk.daily_change) + ' USDT' + (rk.daily_limit_hit ? '  [LIMIT HIT]' : '')); 
+    dc.className = cls(rk.daily_change);
   }
 }
 
