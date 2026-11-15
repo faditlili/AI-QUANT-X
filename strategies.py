@@ -128,6 +128,15 @@ def _side_filters(name, cand, ctx):
         elif (not is_long) and ml_prob > config.ML_NEUTRAL_THRESHOLD:
             hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
 
+    # HARD 4: News Sentiment
+    if getattr(config, "USE_SENTIMENT_FILTER", False):
+        sent = ctx.get("sentiment", {})
+        sent_score = sent.get("score", 0.0)
+        if is_long and sent_score <= config.SENTIMENT_BEARISH_BLOCK:
+            hard.append(f"News is too Bearish ({sent_score:.2f})")
+        elif (not is_long) and sent_score >= config.SENTIMENT_BULLISH_BLOCK:
+            hard.append(f"News is too Bullish ({sent_score:.2f})")
+
     # SOFT: VWAP and order flow
     if name in TREND_FOLLOWERS:
         vwap = _vwap(ctx)
