@@ -121,12 +121,14 @@ def _side_filters(name, cand, ctx):
             (soft if name == "dip_buyer" else hard).append("BTC/ETH trend opposes")
 
     # HARD 3: Machine Learning Filter
+    # ml_prob is None when the model has no proven edge (or in backtests): then ML has no opinion.
     if getattr(config, "USE_ML_FILTER", False):
-        ml_prob = ctx.get("ml_prob", 0.5)
-        if is_long and ml_prob < config.ML_CONFIDENCE_THRESHOLD:
-            hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
-        elif (not is_long) and ml_prob > config.ML_NEUTRAL_THRESHOLD:
-            hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
+        ml_prob = ctx.get("ml_prob")
+        if ml_prob is not None:
+            if is_long and ml_prob < config.ML_CONFIDENCE_THRESHOLD:
+                hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
+            elif (not is_long) and ml_prob > config.ML_NEUTRAL_THRESHOLD:
+                hard.append(f"ML Rejection (Prob: {ml_prob:.2f})")
 
     # HARD 4: News Sentiment
     if getattr(config, "USE_SENTIMENT_FILTER", False):
