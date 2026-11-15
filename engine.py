@@ -2,6 +2,7 @@
 import asyncio, logging, time
 import datetime
 import config
+from order_book import get_order_book_imbalance
 from market_data import MarketData
 from indicators import calculate_indicators, direction
 from strategies import select_signal
