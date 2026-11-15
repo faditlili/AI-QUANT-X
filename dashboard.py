@@ -99,7 +99,7 @@ body::before{
 .btn-down{color:var(--down);border-color:rgba(var(--down-rgb),.5);background:linear-gradient(145deg,rgba(var(--down-rgb),.18),rgba(var(--down-rgb),.03));box-shadow:0 0 14px rgba(var(--down-rgb),.22),inset 0 1px 0 rgba(255,255,255,.1)}
 .btn[disabled]{opacity:.55;pointer-events:none}
 .btn-wide{width:100%;height:40px;font-size:11px}
-@media(max-width:380px){.btn .lbl{display:none}.btn{padding:0 10px}}
+@media(max-width:430px){#pause-btn .lbl{display:none}}
 
 /* ---------- glass cards ---------- */
 .glass{position:relative;overflow:hidden;border-radius:var(--radius);padding:16px;
