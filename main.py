@@ -1,4 +1,4 @@
-import hmac, logging, sys
+import logging, sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -8,6 +8,7 @@ from database import Database
 from engine import Engine
 from telegram_bot import TelegramNotifier
 from dashboard import router
+import security
 
 # INFO إلى stdout (عادي)، والتحذيرات والأخطاء إلى stderr (تظهر حمراء في Railway)
 _out=logging.StreamHandler(sys.stdout); _out.addFilter(lambda r: r.levelno<logging.WARNING)
@@ -18,6 +19,17 @@ logging.basicConfig(level=getattr(logging,config.LOG_LEVEL.upper(),logging.INFO)
 for _noisy in ("httpx","httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 config.validate_config()
+if not config.DASHBOARD_KEY:
+    logging.getLogger("security").warning("DASHBOARD_KEY is empty: the dashboard and its control buttons are open to anyone who knows the URL. Set DASHBOARD_KEY in Railway Variables.")
+
+def _client_ip(request: Request):
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _is_https(request: Request):
+    return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -83,7 +95,7 @@ async def login_page():
         </form>
         
         <div class="mt-8 text-center border-t border-slate-800 pt-4">
-            <p class="text-[9px] text-slate-600 font-mono">PROTECTED BY QUANTUM ENCRYPTION</p>
+            <p class="text-[9px] text-slate-600 font-mono">PAPER TRADING SIMULATION</p>
         </div>
       </div>
     </body>
@@ -92,46 +104,55 @@ async def login_page():
 
 # --- مسار معالجة تسجيل الدخول ---
 @app.post("/api/login")
-async def api_login(password: str = Form(...)):
+async def api_login(request: Request, password: str = Form(...)):
     if not config.DASHBOARD_KEY:
         return RedirectResponse("/", status_code=303)
-        
-    if hmac.compare_digest(str(password).encode(), config.DASHBOARD_KEY.encode()):
+
+    ip = _client_ip(request)
+    if security.is_locked(ip):
+        return HTMLResponse("<script>alert('Too many attempts. Try again in 5 minutes.');window.location.href='/login';</script>", status_code=429)
+
+    if security.check_credentials(config.DASHBOARD_KEY, supplied_key=str(password)):
+        security.clear_failures(ip)
         response = RedirectResponse("/", status_code=303)
-        response.set_cookie("dash_key", config.DASHBOARD_KEY, httponly=True, samesite="lax", max_age=30*86400, secure=False)
+        response.set_cookie("dash_key", security.session_token(config.DASHBOARD_KEY), httponly=True, samesite="lax",
+                            max_age=30*86400, secure=_is_https(request))
         return response
-    else:
-        # كلمة مرور خاطئة
-        return HTMLResponse("""
-        <script>
-            alert('ACCESS DENIED: Invalid Key');
-            window.location.href='/login';
-        </script>
-        """, status_code=401)
+
+    security.register_failure(ip)
+    return HTMLResponse("""
+    <script>
+        alert('ACCESS DENIED: Invalid Key');
+        window.location.href='/login';
+    </script>
+    """, status_code=401)
 
 # --- الحارس (Middleware) ---
 @app.middleware("http")
 async def dashboard_key_guard(request: Request, call_next):
     key=config.DASHBOARD_KEY
-    
-    # إذا لم يتم تعيين كلمة سر، افتح الباب
-    if not key or request.url.path in ["/health", "/login", "/api/login"]:
-        return await call_next(request)
-        
-    supplied=request.query_params.get("key") or request.cookies.get("dash_key") or ""
-    
-    if not hmac.compare_digest(supplied.encode(),key.encode()):
-        # إذا كان الطلب لـ API، أعطه خطأ
-        if request.url.path.startswith("/api/"):
-            return JSONResponse({"detail":"unauthorized"},status_code=401)
-        # إذا كان الطلب لصفحة (الواجهة)، وجهه لشاشة الدخول
-        return RedirectResponse(url="/login")
-        
-    response=await call_next(request)
-    # إذا دخل بالرابط المباشر، احفظ الكوكيز
-    if request.query_params.get("key"):
-        response.set_cookie("dash_key",key,httponly=True,samesite="lax",max_age=30*86400,
-                            secure=request.headers.get("x-forwarded-proto")=="https")
+    path=request.url.path
+
+    if key and path not in ("/health", "/login", "/api/login"):
+        supplied=request.query_params.get("key") or ""
+        token=request.cookies.get("dash_key") or ""
+        if security.is_locked(_client_ip(request)):
+            return JSONResponse({"detail":"too many attempts"},status_code=429)
+        if not security.check_credentials(key, supplied_key=supplied, supplied_token=token):
+            if supplied: security.register_failure(_client_ip(request))
+            if path.startswith("/api/"):
+                return JSONResponse({"detail":"unauthorized"},status_code=401)
+            return RedirectResponse(url="/login")
+        response=await call_next(request)
+        if supplied:
+            response.set_cookie("dash_key",security.session_token(key),httponly=True,samesite="lax",
+                                max_age=30*86400,secure=_is_https(request))
+    else:
+        response=await call_next(request)
+
+    response.headers["X-Content-Type-Options"]="nosniff"
+    response.headers["X-Frame-Options"]="DENY"
+    response.headers["Referrer-Policy"]="no-referrer"
     return response
 
 @app.get("/health")
