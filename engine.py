@@ -88,9 +88,13 @@ class Engine:
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         
+        # --- السطر الجديد: جلب بيانات دفتر الأوامر ---
+        ob_data = await get_order_book_imbalance(symbol, session=self.market.session)
+        
         ctx={"source":source,"symbol":symbol,"compass":macro_ctx.get("compass"),"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
-             "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour}
+             "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour,
+             "order_book": ob_data} # <--- السطر الجديد: تمرير البيانات للاستراتيجية
              
         result=select_signal(ctx)
         
