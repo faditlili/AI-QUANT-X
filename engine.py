@@ -1,10 +1,11 @@
-"""Asynchronous paper-simulation engine with AI/ML and WebSockets."""
+"""Asynchronous paper-simulation engine with AI, ML, WebSockets, and Sentiment."""
 import asyncio, logging, time, os
 import datetime
 import config
 from order_book import get_order_book_imbalance
 from ml_filter import train_model, get_ml_probability
 from websocket_streamer import start_price_stream, get_live_price
+from sentiment_engine import get_market_sentiment
 from market_data import MarketData
 from indicators import calculate_indicators, direction, compute_frame
 from strategies import select_signal
@@ -29,11 +30,9 @@ class Engine:
         await self.market.start()
         await self.news.start()
         
-        # 1. تشغيل البث المباشر للأسعار (WebSockets) في الخلفية
         log.info("Starting WebSocket Price Stream...")
         self.ws_task = asyncio.create_task(start_price_stream())
         
-        # 2. تحميل الإعدادات والاستراتيجية الأفضل
         saved_rsi = self.db.get_state("auto_rsi")
         saved_ema = self.db.get_state("auto_ema")
         saved_strategy = self.db.get_state("auto_strategy")
@@ -45,7 +44,6 @@ class Engine:
             config.STRATEGIES = (saved_strategy,)
             log.info(f"Auto-Tune Active: Using strategy '{saved_strategy}' with RSI {saved_rsi} & EMA {saved_ema}")
             
-        # 3. تدريب الذكاء الاصطناعي عند بدء التشغيل (إذا لم يكن موجوداً)
         if getattr(config, "USE_ML_FILTER", False):
             model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pkl")
             if not os.path.exists(model_path):
@@ -57,7 +55,6 @@ class Engine:
                         await asyncio.to_thread(train_model, df_ind)
                 except Exception as e:
                     log.error(f"Failed to train ML model on startup: {e}")
-        # -----------------------------------------------------------------
 
         self.running=True
         if self.task is None or self.task.done(): self.task=asyncio.create_task(self._run())
@@ -107,18 +104,18 @@ class Engine:
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
         current_hour = datetime.datetime.now(datetime.timezone.utc).hour
         
-        # جلب بيانات دفتر الأوامر
         ob_data = await get_order_book_imbalance(symbol, session=self.market.session)
         
-        # جلب احتمال الذكاء الاصطناعي
         ml_prob = 0.5
         if getattr(config, "USE_ML_FILTER", False):
             ml_prob = get_ml_probability(primary)
+            
+        sentiment = await get_market_sentiment()
         
         ctx={"source":source,"symbol":symbol,"compass":macro_ctx.get("compass"),"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
              "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour,
-             "order_book": ob_data, "ml_prob": ml_prob}
+             "order_book": ob_data, "ml_prob": ml_prob, "sentiment": sentiment}
              
         result=select_signal(ctx)
         
@@ -154,7 +151,6 @@ class Engine:
             if self.notifier: await self.notifier.notify_trade_opened(opened["position"])
 
     async def monitor_positions(self):
-        """مراقبة الصفقات المفتوحة باستخدام الأسعار اللحظية (WebSocket)"""
         open_positions = self.db.get_open_positions()
         if not open_positions: return
         
@@ -163,10 +159,7 @@ class Engine:
             symbol = p["symbol"]
             source = p["source"]
             
-            # القراءة من الذاكرة الفورية (0.01 ثانية)
             live_price = get_live_price(symbol)
-            
-            # إذا لم يصل السعر بعد (عند بدء التشغيل)، نجلب السعر من REST API كاحتياط
             if not live_price:
                 try:
                     res = await self.market.get_last_prices(source)
