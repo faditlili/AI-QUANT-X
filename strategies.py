@@ -38,11 +38,9 @@ class MeanReversionStrategy:
     def evaluate(self, ctx):
         p = ctx["primary"]
         z, rsi = p["zscore"], p["rsi"]
-
         if z <= -1.5 and rsi <= 42: side = "LONG"
         elif z >= 1.5 and rsi >= 58: side = "SHORT"
         else: return None
-
         score, reasons = 40, [f"Price stretched {abs(z):.1f} sigma"]
         if (side == "LONG" and rsi <= 32) or (side == "SHORT" and rsi >= 68): score += 20; reasons.append("RSI extreme")
         else: score += 10; reasons.append("RSI leaning extreme")
@@ -102,12 +100,12 @@ class DipBuyerStrategy:
 REGISTRY = {s.name: s for s in (TrendStrategy(), MeanReversionStrategy(), BreakoutStrategy(), DipBuyerStrategy())}
 
 def _side_filters(name, cand, ctx):
-    """Return (hard, soft). Hard = risk vetoes that always block. Soft = confluence checks that cost points."""
+    """Return (hard, soft). Hard = risk vetoes. Soft = confluence checks that cost points."""
     p = ctx["primary"]
     is_long = cand["side"] == "LONG"
     hard, soft = [], []
 
-    # HARD 1: crowded funding (futures only; funding defaults to 0 when unknown)
+    # HARD 1: crowded funding
     if getattr(config, "USE_FUNDING_RATE_FILTER", False):
         funding = ctx.get("funding_rate", 0.0)
         if is_long and funding > config.MAX_LONG_FUNDING_RATE:
@@ -115,15 +113,14 @@ def _side_filters(name, cand, ctx):
         elif (not is_long) and funding < config.MIN_SHORT_FUNDING_RATE:
             hard.append(f"Funding low ({funding:.4f})")
 
-    # HARD 2: BTC/ETH compass (soft for dip_buyer, which is counter-trend by design)
+    # HARD 2: BTC/ETH compass
     compass = ctx.get("compass")
     if compass and getattr(config, "USE_BTC_COMPASS", False) and ctx.get("symbol") not in config.DIRECTION_SYMBOLS:
         against = (is_long and compass == "BEARISH") or ((not is_long) and compass == "BULLISH")
         if against:
             (soft if name == "dip_buyer" else hard).append("BTC/ETH trend opposes")
 
-    # SOFT: VWAP and order flow only make sense for trend-following strategies.
-    # Mean-reversion and dip-buying trade AGAINST price/flow, so these checks would always veto them.
+    # SOFT: VWAP and order flow (only for trend-following strategies)
     if name in TREND_FOLLOWERS:
         vwap = _vwap(ctx)
         if vwap is not None:
@@ -143,6 +140,15 @@ def _side_filters(name, cand, ctx):
         else:
             if fng < config.FEAR_GREED_MIN_SHORT: soft.append("Extreme Fear")
             if breadth > config.BREADTH_MAX_SHORT: soft.append("Strong Breadth")
+
+    # SOFT: Order Book Liquidity Walls (الفلتر الذي أضفناه)
+    if getattr(config, "USE_ORDER_BOOK_FILTER", False):
+        ob = ctx.get("order_book", {})
+        if is_long and ob.get("resistance_strength") == "STRONG":
+            soft.append("Strong Ask Wall")
+        elif (not is_long) and ob.get("support_strength") == "STRONG":
+            soft.append("Strong Bid Wall")
+
     return hard, soft
 
 def _decision(regime, cand, res):
@@ -159,12 +165,11 @@ def select_signal(ctx, enabled=None):
             return {"regime": "OUT_OF_SESSION", "strategy": None, "score": 0, "action": "HOLD", "reason": "Outside high-liquidity sessions", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
 
     regime = detect_regime(ctx["primary"])
-
     results = []
+    
     for name in (enabled or config.STRATEGIES):
         strat = REGISTRY.get(name)
         if not strat: continue
-
         if regime not in strat.regimes and name != "dip_buyer": continue
 
         cand = strat.evaluate(ctx)
@@ -173,14 +178,17 @@ def select_signal(ctx, enabled=None):
         blockers = []
         if not cand["confirmed"]:
             blockers.append("Higher timeframe opposes")
+            
         hard, soft = _side_filters(name, cand, ctx)
         blockers.extend(hard)
 
         if soft:
             cand["score"] -= config.SOFT_FILTER_PENALTY * len(soft)
             cand["reasons"].extend(soft)
+            
         if len(soft) > config.MAX_SOFT_FILTER_FAILS:
             blockers.append(f"Too many weak signals ({len(soft)})")
+            
         if regime == "HIGH_VOL" and name != "dip_buyer" and cand["score"] < config.HIGH_VOL_MIN_SCORE:
             blockers.append(f"HIGH_VOL needs score {config.HIGH_VOL_MIN_SCORE}+ (got {cand['score']})")
 
@@ -189,7 +197,12 @@ def select_signal(ctx, enabled=None):
 
         confirmed = not blockers
         shown = blockers + [x for x in soft if x not in blockers]
-        tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"], "blockers": shown}
+        
+        # تعديل بسيط ليتوافق مع decision_engine
+        tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
+        if blockers:
+            tech["blocked_reason"] = " | ".join(blockers)
+            
         res = evaluate_setup(tech, ctx["source"], confirmed, ctx.get("news_risk", 0.0))
         results.append((cand, res))
 
@@ -200,5 +213,6 @@ def select_signal(ctx, enabled=None):
     if results:
         cand, res = max(results, key=lambda x: x[0]["score"])
         return _decision(regime, cand, res)
+        
     hint = " (needs squeeze breakout, strong trend, or RSI<=32 dip)" if regime == "HIGH_VOL" else ""
     return {"regime": regime, "strategy": None, "score": 0, "action": "HOLD", "reason": f"[{regime}] No setup{hint}", "stop_mult": config.ATR_STOP_MULTIPLIER, "rr": config.REWARD_RISK_RATIO}
