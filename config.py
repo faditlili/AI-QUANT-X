@@ -7,7 +7,7 @@ except ImportError:
     pass
 
 APP_NAME = "AI QUANT X"
-APP_VERSION = "6.0.0"
+APP_VERSION = "6.2.0"
 PAPER_MODE = True
 TRADING_MODE = "PAPER SIMULATION"
 
@@ -58,12 +58,10 @@ STRICT_HTF_CONFIRM = os.getenv("STRICT_HTF_CONFIRM", "false").lower() == "true"
 MAX_SAME_SIDE = int(os.getenv("MAX_SAME_SIDE", "3"))
 
 MIN_SIGNAL_SCORE = 50
+SIGNAL_COOLDOWN_SECONDS = 3600
+POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
-# --- Soft filters: each failed soft filter costs points instead of vetoing the trade ---
-SOFT_FILTER_PENALTY = int(os.getenv("SOFT_FILTER_PENALTY", "10"))
-MAX_SOFT_FILTER_FAILS = int(os.getenv("MAX_SOFT_FILTER_FAILS", "2"))
-HIGH_VOL_MIN_SCORE = int(os.getenv("HIGH_VOL_MIN_SCORE", "65"))
-COUNTER_TREND_MIN_SCORE = int(os.getenv("COUNTER_TREND_MIN_SCORE", "65"))
+# --- إعدادات الفلاتر الجديدة (التي طلبها كلود) ---
 TAKER_LONG_MIN = 0.45
 TAKER_SHORT_MAX = 0.55
 FEAR_GREED_MAX_LONG = 80
@@ -71,12 +69,13 @@ FEAR_GREED_MIN_SHORT = 20
 BREADTH_MIN_LONG = 30.0
 BREADTH_MAX_SHORT = 70.0
 
-# --- Auto-Tune quality gate ---
-AUTOTUNE_MIN_TRADES = int(os.getenv("AUTOTUNE_MIN_TRADES", "8"))
-AUTOTUNE_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_MIN_PROFIT_FACTOR", "1.1"))
-AUTOTUNE_MAX_DRAWDOWN_PCT = float(os.getenv("AUTOTUNE_MAX_DRAWDOWN_PCT", "20.0"))
-SIGNAL_COOLDOWN_SECONDS = 3600
-POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
+SOFT_FILTER_PENALTY = 10
+MAX_SOFT_FILTER_FAILS = 2
+HIGH_VOL_MIN_SCORE = 65
+COUNTER_TREND_MIN_SCORE = 65
+
+# --- فلتر دفتر الأوامر ---
+USE_ORDER_BOOK_FILTER = True
 
 STRATEGIES = tuple(s.strip() for s in os.getenv(
     "STRATEGIES", "trend,mean_reversion,breakout,dip_buyer").split(",") if s.strip())
@@ -132,7 +131,7 @@ TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "") 
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
-USER_AGENT = "AI-QUANT-X-Paper/6.0"
+USER_AGENT = "AI-QUANT-X-Paper/6.2"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 USE_FUNDING_RATE_FILTER = os.getenv("USE_FUNDING_RATE_FILTER", "true").lower() == "true"
@@ -156,7 +155,3 @@ def validate_config():
     if not 0 < MAX_ALLOCATION_PCT <= 100: raise ValueError("Invalid allocation cap.")
     if DB_PATH == ":memory:": return True
     return True
-
-# --- Order Book Filter ---
-USE_ORDER_BOOK_FILTER = True
-ORDER_BOOK_STRONG_PENALTY = 20  # خصم 20 نقطة إذا كان جدار السيولة ضد الصفقة
