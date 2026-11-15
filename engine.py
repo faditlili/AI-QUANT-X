@@ -1,4 +1,4 @@
-"""Asynchronous paper-simulation engine with AI, ML, WebSockets, Sentiment, and Dynamic Symbols."""
+"""Asynchronous paper-simulation engine with AI, ML, WebSockets, Sentiment, and Whale Detection."""
 import asyncio, logging, time, os
 import datetime
 import config
@@ -7,6 +7,7 @@ from ml_filter import train_model, get_ml_probability
 from websocket_streamer import start_price_stream, get_live_price
 from sentiment_engine import get_market_sentiment
 from symbol_scanner import get_top_symbols
+from volume_anomaly import detect_volume_anomaly
 from market_data import MarketData
 from indicators import calculate_indicators, direction, compute_frame
 from strategies import select_signal
@@ -26,7 +27,8 @@ class Engine:
         self.paused=self.db.get_state("paused","0")=="1"
         self.notifier=None
         self.compass={}
-        self.last_symbol_update = 0 # <--- تتبع وقت تحديث العملات
+        self.last_symbol_update = 0
+        self.last_whale_check = 0
 
     async def start(self):
         await self.market.start()
@@ -100,7 +102,12 @@ class Engine:
         for tf in config.TIMEFRAMES:
             frames[tf]=await self._indicators(symbol,source,tf)
         dirs=[direction(frames[x]) for x in config.TIMEFRAMES]
+        
+        # جلب الشموع الخام لتحليل الحجم
+        raw_df = await self.market.get_klines(symbol, config.PRIMARY_TIMEFRAME, config.KLINE_LIMIT, source)
         primary=frames[config.PRIMARY_TIMEFRAME]
+        vol_anomaly = detect_volume_anomaly(raw_df)
+        
         news=await self.news.get_news_risk(symbol)
         
         funding_rate = await self.market.get_funding_rate(symbol, source) if source == "futures" else 0.0
@@ -117,7 +124,7 @@ class Engine:
         ctx={"source":source,"symbol":symbol,"compass":macro_ctx.get("compass"),"primary":primary,"htf":frames[config.TIMEFRAMES[-1]],
              "dirs":dirs,"news_risk":news.get("risk",0), "funding_rate": funding_rate,
              "fear_greed": macro_ctx["fng"], "breadth": macro_ctx["breadth"], "hour_utc": current_hour,
-             "order_book": ob_data, "ml_prob": ml_prob, "sentiment": sentiment}
+             "order_book": ob_data, "ml_prob": ml_prob, "sentiment": sentiment, "vol_anomaly": vol_anomaly}
              
         result=select_signal(ctx)
         
@@ -152,7 +159,44 @@ class Engine:
             self.db.set_state(f"cooldown:{source}:{symbol}",time.time())
             if self.notifier: await self.notifier.notify_trade_opened(opened["position"])
 
+    async def check_whale_emergency_exit(self):
+        """إذا ظهر حوت معاكس للصفقة المفتوحة، أغلقها فوراً لحماية رأس المال"""
+        now = time.time()
+        if now - self.last_whale_check < 60: return # فحص كل دقيقة فقط لتجنب حدود API
+        self.last_whale_check = now
+        
+        open_positions = self.db.get_open_positions()
+        if not open_positions: return
+        
+        for p in open_positions:
+            try:
+                raw_df = await self.market.get_klines(p["symbol"], config.PRIMARY_TIMEFRAME, config.KLINE_LIMIT, p["source"])
+                anomaly = detect_volume_anomaly(raw_df)
+                
+                if anomaly.get("anomaly") and anomaly.get("intensity") in ("HIGH", "EXTREME"):
+                    if p["side"] == "LONG" and anomaly.get("direction") == "SELLING_WHALE":
+                        log.warning(f"EMERGENCY EXIT: Selling Whale detected on {p['symbol']} LONG position!")
+                        prices = await self.market.get_last_prices(p["source"])
+                        price = prices.get(p["symbol"], {}).get("last_price")
+                        if price:
+                            closed = self.trader.close_position(p["id"], price, "WHALE_EXIT")
+                            if closed and self.notifier: await self.notifier.notify_trade_closed(closed)
+                            
+                    elif p["side"] == "SHORT" and anomaly.get("direction") == "BUYING_WHALE":
+                        log.warning(f"EMERGENCY EXIT: Buying Whale detected on {p['symbol']} SHORT position!")
+                        prices = await self.market.get_last_prices(p["source"])
+                        price = prices.get(p["symbol"], {}).get("last_price")
+                        if price:
+                            closed = self.trader.close_position(p["id"], price, "WHALE_EXIT")
+                            if closed and self.notifier: await self.notifier.notify_trade_closed(closed)
+            except Exception as e:
+                log.error(f"Whale check failed for {p['symbol']}: {e}")
+
     async def monitor_positions(self):
+        # 1. فحص الحيتان أولاً (طوارئ)
+        await self.check_whale_emergency_exit()
+
+        # 2. مراقبة الصفقات العادية
         open_positions = self.db.get_open_positions()
         if not open_positions: return
         
@@ -189,8 +233,7 @@ class Engine:
     async def scan_once(self):
         self.last_scan=time.time()
         
-        # --- تحديث قائمة العملات ديناميكياً كل 12 ساعة ---
-        if time.time() - self.last_symbol_update > 43200: # 12 ساعة
+        if time.time() - self.last_symbol_update > 43200:
             try:
                 new_symbols = await get_top_symbols()
                 if new_symbols:
@@ -199,7 +242,6 @@ class Engine:
                     log.info(f"Dynamic Scanner: Updated watchlist to {len(config.SYMBOLS)} top movers.")
             except Exception as e:
                 log.error(f"Failed to update symbols: {e}")
-        # -------------------------------------------------
 
         fng = await self.market.get_fear_and_greed()
         
