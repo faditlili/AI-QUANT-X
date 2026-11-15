@@ -156,3 +156,7 @@ def validate_config():
     if not 0 < MAX_ALLOCATION_PCT <= 100: raise ValueError("Invalid allocation cap.")
     if DB_PATH == ":memory:": return True
     return True
+
+# --- Order Book Filter ---
+USE_ORDER_BOOK_FILTER = True
+ORDER_BOOK_STRONG_PENALTY = 20  # خصم 20 نقطة إذا كان جدار السيولة ضد الصفقة
