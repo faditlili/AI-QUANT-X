@@ -7,7 +7,7 @@ except ImportError:
     pass
 
 APP_NAME = "AI QUANT X"
-APP_VERSION = "6.2.0"
+APP_VERSION = "7.0.0"
 PAPER_MODE = True
 TRADING_MODE = "PAPER SIMULATION"
 
@@ -61,7 +61,6 @@ MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
 POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
 
-# --- إعدادات الفلاتر الجديدة (التي طلبها كلود) ---
 TAKER_LONG_MIN = 0.45
 TAKER_SHORT_MAX = 0.55
 FEAR_GREED_MAX_LONG = 80
@@ -74,8 +73,16 @@ MAX_SOFT_FILTER_FAILS = 2
 HIGH_VOL_MIN_SCORE = 65
 COUNTER_TREND_MIN_SCORE = 65
 
-# --- فلتر دفتر الأوامر ---
 USE_ORDER_BOOK_FILTER = True
+
+# --- ML & Sentiment Filters ---
+USE_ML_FILTER = True
+ML_CONFIDENCE_THRESHOLD = 0.55
+ML_NEUTRAL_THRESHOLD = 0.45
+
+USE_SENTIMENT_FILTER = True
+SENTIMENT_BEARISH_BLOCK = -0.4
+SENTIMENT_BULLISH_BLOCK = 0.4
 
 STRATEGIES = tuple(s.strip() for s in os.getenv(
     "STRATEGIES", "trend,mean_reversion,breakout,dip_buyer").split(",") if s.strip())
@@ -131,7 +138,7 @@ TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "") 
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
-USER_AGENT = "AI-QUANT-X-Paper/6.2"
+USER_AGENT = "AI-QUANT-X-Paper/7.0"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 USE_FUNDING_RATE_FILTER = os.getenv("USE_FUNDING_RATE_FILTER", "true").lower() == "true"
@@ -155,7 +162,3 @@ def validate_config():
     if not 0 < MAX_ALLOCATION_PCT <= 100: raise ValueError("Invalid allocation cap.")
     if DB_PATH == ":memory:": return True
     return True
-    # --- Machine Learning Filter ---
-USE_ML_FILTER = True
-ML_CONFIDENCE_THRESHOLD = 0.55  # إذا كان الاحتمال أقل من 55% للشراء، ارفض الصفقة
-ML_NEUTRAL_THRESHOLD = 0.45     # إذا كان الاحتمال أكبر من 45% للبيع، ارفض الصفقة
