@@ -7,7 +7,7 @@
     list.forEach(function (d) {
       if (d.action !== "HOLD") return;
       var txt = String(d.reason || "").replace(/^\[[^\]]*\]\s*/, "").replace(/^Blocked:\s*/i, "");
-      txt.split(" | ").forEach(function (part) {
+      txt.split(/ \| |; /).forEach(function (part) {
         var k = part.replace(/\([^)]*\)/g, "").replace(/\d+(\.\d+)?/g, "#").replace(/\s+/g, " ").trim();
         if (k) count[k] = (count[k] || 0) + 1;
       });
