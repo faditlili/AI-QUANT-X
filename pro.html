@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<title>AI QUANT X</title>
+<link rel="stylesheet" href="/pro/pro.css">
+</head>
+<body>
+<div id="boot"></div>
+<header id="top"></header>
+<main id="view"></main>
+<nav id="tabs"></nav>
+<div id="sheet"></div>
+<div id="toast"></div>
+<script src="/pro/pro_i18n.js"></script>
+<script src="/pro/pro_core.js"></script>
+<script src="/pro/pro_charts.js"></script>
+<script src="/pro/pro_overview.js"></script>
+<script src="/pro/pro_trades.js"></script>
+<script src="/pro/pro_signals.js"></script>
+<script src="/pro/pro_tools.js"></script>
+<script>
+(function () {
+  var need = ["i18n", "core", "charts", "overview", "trades", "signals", "tools"];
+  var have = window.__mods || [];
+  var miss = need.filter(function (m) { return have.indexOf(m) < 0; });
+  var list = miss.map(function (m) { return "pro_" + m + ".js"; });
+  var cssOk = getComputedStyle(document.documentElement).getPropertyValue("--end").trim() === "1";
+  if (!cssOk) list.push("pro.css");
+  if (list.length || !window.Q) {
+    var b = document.getElementById("boot");
+    b.style.display = "block";
+    b.textContent = "Missing or incomplete files: " + list.join(", ");
+    return;
+  }
+  window.Q.start();
+})();
+</script>
+</body>
+</html>
