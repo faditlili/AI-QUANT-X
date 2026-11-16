@@ -9,6 +9,7 @@ from engine import Engine
 from telegram_bot import TelegramNotifier
 from dashboard import router
 from ui import router as ui_router
+from ui import router as ui_router
 import security
 
 # INFO إلى stdout (عادي)، والتحذيرات والأخطاء إلى stderr (تظهر حمراء في Railway)
@@ -50,6 +51,7 @@ async def lifespan(app:FastAPI):
 
 app=FastAPI(title=config.APP_NAME,version=config.APP_VERSION,lifespan=lifespan)
 app.include_router(ui_router)  # new UI first: it takes over "/" (remove this line to get the old dashboard back)
+app.include_router(ui_router)
 app.include_router(router)
 
 # --- شاشة تسجيل الدخول الفخمة ---
