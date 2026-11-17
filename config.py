@@ -12,7 +12,7 @@ def _bool(name, default):
 
 
 APP_NAME = "AI QUANT X"
-APP_VERSION = "7.1.0"
+APP_VERSION = "7.2.0"
 PAPER_MODE = True
 TRADING_MODE = "PAPER SIMULATION"
 
@@ -81,6 +81,7 @@ FEAR_GREED_MIN_SHORT = 20
 BREADTH_MIN_LONG = 30.0
 BREADTH_MAX_SHORT = 70.0
 
+CONFLICT_MIN_SCORE_GAP = int(os.getenv("CONFLICT_MIN_SCORE_GAP", "15"))
 SOFT_FILTER_PENALTY = 10
 MAX_SOFT_FILTER_FAILS = 2
 HIGH_VOL_MIN_SCORE = 65
@@ -136,8 +137,8 @@ AUTOTUNE_MIN_TRADES = int(os.getenv("AUTOTUNE_MIN_TRADES", "8"))
 AUTOTUNE_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_MIN_PROFIT_FACTOR", "1.1"))
 AUTOTUNE_MAX_DRAWDOWN_PCT = float(os.getenv("AUTOTUNE_MAX_DRAWDOWN_PCT", "25"))
 AUTOTUNE_TEST_FRACTION = float(os.getenv("AUTOTUNE_TEST_FRACTION", "0.3"))
-AUTOTUNE_TEST_MIN_TRADES = int(os.getenv("AUTOTUNE_TEST_MIN_TRADES", "3"))
-AUTOTUNE_TEST_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_TEST_MIN_PROFIT_FACTOR", "1.0"))
+AUTOTUNE_TEST_MIN_TRADES = int(os.getenv("AUTOTUNE_TEST_MIN_TRADES", "10"))
+AUTOTUNE_TEST_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_TEST_MIN_PROFIT_FACTOR", "1.2"))
 
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
 RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "2.0"))
@@ -146,7 +147,26 @@ MAX_ALLOCATION_PCT = float(os.getenv("MAX_ALLOCATION_PCT", "100.0"))
 DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "3.0"))
 
 MAX_DIRECTIONAL_HEAT_PCT = float(os.getenv("MAX_DIRECTIONAL_HEAT_PCT", "10.0"))
-MAX_TOTAL_HEAT_PCT = float(os.getenv("MAX_TOTAL_HEAT_PCT", "20.0"))
+# Kept for backward compatibility only. The aggregate cap is MAX_PORTFOLIO_RISK_PCT (hard ceiling 10%);
+# the old default of 20% silently allowed double the specified limit and is no longer honoured.
+MAX_TOTAL_HEAT_PCT = min(float(os.getenv("MAX_TOTAL_HEAT_PCT", "10.0")), MAX_PORTFOLIO_RISK_PCT)
+
+# --- Futures simulation (isolated margin). Leverage 1 = fully collateralised. ---
+FUTURES_LEVERAGE = float(os.getenv("FUTURES_LEVERAGE", "1"))
+MAINTENANCE_MARGIN_RATE = float(os.getenv("MAINTENANCE_MARGIN_RATE", "0.005"))
+FUNDING_ENABLED = _bool("FUNDING_ENABLED", True)
+REQUIRE_SYMBOL_RULES = _bool("REQUIRE_SYMBOL_RULES", True)   # refuse trades whose exchange rules are unknown
+
+# --- Data safety ---
+PRICE_MAX_AGE_SECONDS = float(os.getenv("PRICE_MAX_AGE_SECONDS", "30"))    # WebSocket price older than this is ignored
+DATA_STALE_SECONDS = float(os.getenv("DATA_STALE_SECONDS", "300"))         # no fresh prices this long -> block new entries
+SYMBOL_INFO_TTL_SECONDS = int(os.getenv("SYMBOL_INFO_TTL_SECONDS", "21600"))
+KLINE_CACHE_SECONDS = float(os.getenv("KLINE_CACHE_SECONDS", "20"))
+WS_URL = os.getenv("BINANCE_WS_URL", "wss://fstream.binance.com/ws/!ticker@arr")
+
+# --- Dashboard security ---
+ALLOW_INSECURE_DASHBOARD = _bool("ALLOW_INSECURE_DASHBOARD", False)  # allow control POSTs without DASHBOARD_KEY
+TRUSTED_PROXY = _bool("TRUSTED_PROXY", True)                          # behind Railway's proxy: use last X-Forwarded-For hop
 
 FEE_RATE = 0.0004
 FEE_RATE_SPOT = 0.001
@@ -175,7 +195,7 @@ TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "") or os.getenv("TELEGRAM_ADMIN_ID", "")
 HTTP_TIMEOUT_SECONDS = 12
 HTTP_RETRY_ATTEMPTS = 2
-USER_AGENT = "AI-QUANT-X-Paper/7.1"
+USER_AGENT = "AI-QUANT-X-Paper/7.2"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 USE_FUNDING_RATE_FILTER = _bool("USE_FUNDING_RATE_FILTER", True)
@@ -197,8 +217,17 @@ def validate_config():
         raise RuntimeError("This build is paper-simulation only.")
     if not SYMBOLS:
         raise ValueError("SYMBOLS cannot be empty.")
-    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 20:
-        raise ValueError("Aggregate portfolio risk must be in (0, 20].")
+    if not 0 < MAX_PORTFOLIO_RISK_PCT <= 10:
+        raise ValueError("Aggregate portfolio risk must be in (0, 10] (specification hard limit).")
+    if not 1 <= FUTURES_LEVERAGE <= 20:
+        raise ValueError("FUTURES_LEVERAGE must be in [1, 20].")
+    if not 0 <= MAINTENANCE_MARGIN_RATE < 0.5:
+        raise ValueError("MAINTENANCE_MARGIN_RATE must be in [0, 0.5).")
+    if MAX_SAME_SIDE < 1 or MAX_OPEN_POSITIONS < 1:
+        raise ValueError("MAX_SAME_SIDE and MAX_OPEN_POSITIONS must be >= 1.")
+    unknown = [x for x in STRATEGIES if x not in ("trend", "mean_reversion", "breakout", "dip_buyer")]
+    if unknown:
+        raise ValueError("Unknown strategies: %s" % ", ".join(unknown))
     if not 0 < RISK_PER_TRADE_PCT <= MAX_PORTFOLIO_RISK_PCT:
         raise ValueError("Invalid per-position risk.")
     if not 0 < MAX_ALLOCATION_PCT <= 100:
