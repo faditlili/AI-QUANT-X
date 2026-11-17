@@ -6,6 +6,7 @@
 # The VADER lexicon (a small text file) is downloaded automatically on first use.
 
 import asyncio
+import logging
 import time
 import xml.etree.ElementTree as ElementTree
 
@@ -28,6 +29,7 @@ REQUEST_TIMEOUT_SECONDS = 10
 CACHE_SECONDS = 300
 BULLISH_THRESHOLD = 0.15
 BEARISH_THRESHOLD = -0.15
+log = logging.getLogger(__name__)
 USER_AGENT = "Mozilla/5.0 (compatible; AIQuantX/1.0)"
 
 _analyzer = None
@@ -35,6 +37,7 @@ _cache = {"time": None, "result": None}
 
 
 def _neutral_result():
+    """A genuinely computed neutral reading is not the same as 'unavailable' (which is None)."""
     return {"score": 0.0, "state": "NEUTRAL", "top_news": []}
 
 
@@ -53,7 +56,7 @@ def _get_analyzer():
         _analyzer = SentimentIntensityAnalyzer()
         return _analyzer
     except Exception as error:
-        print("[SENTIMENT] could not load VADER: " + str(error))
+        log.warning("VADER unavailable: %s", error)
         return None
 
 
@@ -76,7 +79,7 @@ async def _fetch_headlines(session, url):
                 break
         return headlines
     except Exception as error:
-        print("[SENTIMENT] feed failed " + url + ": " + str(error))
+        log.warning("Sentiment feed failed %s: %s", url, error)
         return []
 
 
@@ -88,7 +91,7 @@ def _analyze(analyzer, headlines):
         scored.append((compound, headline))
 
     if not scored:
-        return _neutral_result()
+        return None          # no headlines = no opinion, never a fabricated neutral score
 
     average = sum(score for score, _ in scored) / len(scored)
 
@@ -110,7 +113,8 @@ async def get_market_sentiment():
     """Return the overall crypto news sentiment.
 
     Result: {"score": 0.25, "state": "BULLISH", "top_news": ["headline 1", "headline 2"]}
-    On any failure it returns {"score": 0.0, "state": "NEUTRAL", "top_news": []}.
+    Returns None when sentiment cannot be computed (no VADER, feeds down, no headlines):
+    callers must treat None as "no opinion", never as a neutral score.
     Results are cached for 5 minutes to avoid hammering the feeds.
     """
     try:
@@ -122,7 +126,7 @@ async def get_market_sentiment():
         loop = asyncio.get_running_loop()
         analyzer = await loop.run_in_executor(None, _get_analyzer)
         if analyzer is None:
-            return _neutral_result()
+            return None
 
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
         headers = {"User-Agent": USER_AGENT}
@@ -140,12 +144,12 @@ async def get_market_sentiment():
                     headlines.append(headline)
 
         if not headlines:
-            return _neutral_result()
+            return None
 
         result = _analyze(analyzer, headlines)
         _cache["time"] = now
         _cache["result"] = result
         return result
     except Exception as error:
-        print("[SENTIMENT] failed: " + str(error))
-        return _neutral_result()
+        log.warning("Sentiment failed: %s", error)
+        return None
