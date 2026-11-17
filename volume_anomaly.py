@@ -74,3 +74,32 @@ def detect_volume_anomaly(df):
         }
     except Exception:
         return _no_anomaly()
+
+
+def volume_anomaly_series(df):
+    """Vectorised version of detect_volume_anomaly for every row (backtests).
+
+    Row i uses only candles <= i (baseline = the LOOKBACK_CANDLES candles BEFORE row i), so it is
+    look-ahead free and numerically identical to calling detect_volume_anomaly(df.iloc[:i+1]).
+    Returns a list of dicts in the same shape as detect_volume_anomaly.
+    """
+    vol = np.asarray(df["volume"], dtype=float)
+    opn = np.asarray(df["open"], dtype=float)
+    cls = np.asarray(df["close"], dtype=float)
+    n = len(vol)
+    out = [_no_anomaly() for _ in range(n)]
+    for i in range(MIN_CANDLES, n):
+        hist = vol[max(0, i - LOOKBACK_CANDLES):i]
+        hist = hist[np.isfinite(hist)]
+        if len(hist) < MIN_CANDLES or not np.isfinite(vol[i]):
+            continue
+        std = float(np.std(hist))
+        if std <= 0.0:
+            continue
+        z = (vol[i] - float(np.mean(hist))) / std
+        if z <= ANOMALY_Z_THRESHOLD:
+            continue
+        d = "BUYING_WHALE" if cls[i] > opn[i] else "SELLING_WHALE" if cls[i] < opn[i] else "NEUTRAL"
+        inten = "EXTREME" if z >= EXTREME_Z_THRESHOLD else "HIGH" if z >= HIGH_Z_THRESHOLD else "MODERATE"
+        out[i] = {"anomaly": True, "z_score": round(z, 2), "direction": d, "intensity": inten}
+    return out
