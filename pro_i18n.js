@@ -1,4 +1,3 @@
-
 "use strict";
 (function () {
   window.QI18N = {
