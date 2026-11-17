@@ -1,15 +1,15 @@
-"""Ultimate FastAPI Dashboard - Final Perfected Edition."""
+"""Legacy dashboard page (/legacy) + the JSON API shared with Dashboard Pro (ui.py owns "/")."""
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
-from backtest import run_backtest, format_report
+from backtest import run_backtest, run_walk_forward, format_report
 import config
 from optimizer import run_auto_tune
 
 router=APIRouter()
 _bt_running=False
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/legacy", response_class=HTMLResponse)
 async def dashboard():
     return HTMLResponse("""<!doctype html>
 <html lang="en">
@@ -821,24 +821,35 @@ document.addEventListener('DOMContentLoaded', () => {
 </body>
 </html>""")
 
+_SYMBOL_RE = re.compile(r"[A-Z0-9]{3,20}")
+_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}
+
+
+def _engine(request): return request.app.state.engine
+
+
 @router.get("/api/status")
-async def status(request:Request): return request.app.state.engine.get_status()
+async def status(request:Request): return _engine(request).get_status()
 @router.get("/api/portfolio")
 async def portfolio(request:Request):
     db=request.app.state.db
     return {**db.get_portfolio(),"initial_balance":float(db.get_state("initial_balance",config.INITIAL_BALANCE))}
 @router.get("/api/risk")
-async def risk(request:Request): 
-    r = request.app.state.engine.risk.get_risk_status()
-    r["breadth"] = await request.app.state.engine.market.get_market_breadth("futures")
+async def risk(request:Request):
+    r = _engine(request).risk.get_risk_status()
+    r["breadth"] = await _engine(request).market.get_market_breadth("futures")   # None when unavailable
     return r
 @router.get("/api/positions")
-async def positions(request:Request): 
-    db = request.app.state.db; market = request.app.state.engine.market; pos_list = db.get_open_positions()
-    if pos_list:
-        sources = {p["source"] for p in pos_list}; all_prices = {}
-        for src in sources: all_prices.update(await market.get_last_prices(src))
-        for p in pos_list: p["current_price"] = all_prices.get(p["symbol"], {}).get("last_price", p["entry_price"])
+async def positions(request:Request):
+    db = request.app.state.db; market = _engine(request).market; pos_list = db.get_open_positions()
+    prices = {}
+    for src in {p["source"] for p in pos_list}:
+        try: prices[src] = await market.get_last_prices(src)
+        except Exception: prices[src] = {}
+    for p in pos_list:
+        live = prices.get(p["source"], {}).get(p["symbol"], {}).get("last_price")
+        p["current_price"] = live if live else p.get("mark_price")   # last stored mark, never the entry price
+        p["price_is_live"] = bool(live)
     return pos_list
 @router.get("/api/trades")
 async def trades(request:Request): return request.app.state.db.get_recent_trades()
@@ -849,49 +860,66 @@ async def decisions(request:Request): return request.app.state.db.get_recent_dec
 @router.get("/api/live_tickers")
 async def live_tickers(request: Request):
     try:
-        market = request.app.state.engine.market; tickers = await market.get_tickers_24h("futures"); symbols = list(config.SYMBOLS); out = []
-        for s in symbols:
+        tickers = await _engine(request).market.get_tickers_24h("futures"); out = []
+        for s in list(config.SYMBOLS):
             if s in tickers: out.append({"symbol": s.replace("USDT", ""), "price": tickers[s]["last_price"], "change": round(tickers[s]["change_percent"], 2)})
         return out
-    except Exception: return []
+    except Exception as exc:
+        return JSONResponse({"error": f"tickers unavailable: {exc}"}, status_code=502)
 @router.get("/api/market_klines")
-async def market_klines(request: Request, symbol: str = "BTCUSDT", interval: str = "15m"):
+async def market_klines(request: Request, symbol: str = "BTCUSDT", interval: str = "15m", source: str = "futures"):
+    symbol = symbol.upper()
+    if not _SYMBOL_RE.fullmatch(symbol) or interval not in _INTERVALS or source not in ("spot", "futures"):
+        return JSONResponse({"error": "invalid symbol, interval or source"}, status_code=400)
     try:
-        market = request.app.state.engine.market; df = await market.get_klines(symbol, interval, 100, "futures"); data = []
-        for _, row in df.iterrows(): data.append({"time": int(row["timestamp"]) // 1000, "open": float(row["open"]), "high": float(row["high"]), "low": float(row["low"]), "close": float(row["close"])})
-        return data
-    except Exception as e: return JSONResponse({"error": str(e)}, status_code=500)
+        df = await _engine(request).market.get_klines(symbol, interval, 100, source)
+        return [{"time": int(r.timestamp) // 1000, "open": float(r.open), "high": float(r.high), "low": float(r.low), "close": float(r.close)}
+                for r in df.itertuples()]
+    except Exception as e: return JSONResponse({"error": str(e)}, status_code=502)
 @router.post("/api/toggle_pause")
 async def toggle_pause(request:Request):
-    engine = request.app.state.engine; engine.set_paused(not engine.paused); return {"success": True, "paused": engine.paused}
+    engine = _engine(request); engine.set_paused(not engine.paused); return {"success": True, "paused": engine.paused}
 @router.post("/api/close_position/{pos_id}")
 async def close_position(request:Request, pos_id: int):
     try:
-        db = request.app.state.db; engine = request.app.state.engine; pos = db.get_position(pos_id)
-        if not pos or pos["status"] != "OPEN": return JSONResponse({"success": False, "error": "Not found"}, status_code=400)
-        prices = await engine.market.get_last_prices(pos["source"])
-        if pos["symbol"] not in prices: return JSONResponse({"success": False, "error": "No price"}, status_code=400)
-        engine.trader.close_position(pos_id, prices[pos["symbol"]]["last_price"], "MANUAL_UI"); return {"success": True}
+        db = request.app.state.db; engine = _engine(request); pos = db.get_position(pos_id)
+        if not pos or pos["status"] != "OPEN": return JSONResponse({"success": False, "error": "Not found"}, status_code=404)
+        price = await engine._live_price(pos["symbol"], pos["source"])
+        if not price: return JSONResponse({"success": False, "error": "No live price available"}, status_code=503)
+        row = engine.trader.close_position(pos_id, price, "MANUAL_UI")
+        if not row: return JSONResponse({"success": False, "error": "Position already closed"}, status_code=409)
+        await engine._flush_events([row]); return {"success": True, "net_pnl": row["net_pnl"]}
     except Exception as e: return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 @router.post("/api/run_backtest")
 async def run_backtest_api(request: Request, symbol: str = "BTCUSDT", strategy: str = "all"):
     global _bt_running
     symbol = symbol.upper()
-    if not re.fullmatch(r"[A-Z0-9]{5,15}", symbol): return {"success": False, "error": "Invalid symbol"}
-    if strategy != "all" and strategy not in config.STRATEGIES: return {"success": False, "error": "Invalid strategy"}
-    if _bt_running: return {"success": False, "error": "Another backtest is running, try again shortly"}
+    if not _SYMBOL_RE.fullmatch(symbol): return JSONResponse({"success": False, "error": "Invalid symbol"}, status_code=400)
+    if strategy != "all" and strategy not in config.STRATEGIES: return JSONResponse({"success": False, "error": "Invalid strategy"}, status_code=400)
+    if _bt_running: return JSONResponse({"success": False, "error": "Another backtest is running, try again shortly"}, status_code=429)
     _bt_running = True
     try:
-        engine = request.app.state.engine; market = engine.market; df = await market.fetch_history(symbol, "1h", "futures", 1000)
-        if df.empty: return {"success": False, "error": "Failed to fetch history"}
+        market = _engine(request).market
+        df = await market.fetch_history(symbol, "1h", "futures", min(config.BACKTEST_CANDLES, 1500))
+        if df.empty: return JSONResponse({"success": False, "error": "Failed to fetch history"}, status_code=502)
+        funding = None
+        try: funding = await market.fetch_funding_range(symbol, int(df["timestamp"].iloc[0]), int(df["timestamp"].iloc[-1]))
+        except Exception: funding = None          # reported as "funding NOT included" in the result
         strategies = None if strategy == "all" else [strategy]
-        report = await asyncio.to_thread(run_backtest, df, strategies, "futures")
-        return {"success": True, "report": format_report(symbol, report, "1h")}
-    except Exception as e: return {"success": False, "error": str(e)}
+        report = await asyncio.to_thread(run_backtest, df, strategies, "futures", symbol=symbol, funding=funding)
+        text = format_report(symbol, report, "1h")
+        try:
+            wf = await asyncio.to_thread(run_walk_forward, df, strategies, "futures")
+            text += "\nWalk-forward (out-of-sample, %d/%d folds profitable): " % (wf["profitable_folds"], len(wf["folds"])) + \
+                    " | ".join("%+.1f%% (%d)" % (f["return_pct"], f["trades"]) for f in wf["folds"])
+        except ValueError as exc: text += "\nWalk-forward skipped: %s" % exc
+        return {"success": True, "report": text}
+    except Exception as e: return JSONResponse({"success": False, "error": str(e)}, status_code=500)
     finally: _bt_running = False
 @router.post("/api/auto_tune")
 async def api_auto_tune(request: Request, symbol: str = "BTCUSDT"):
+    symbol = symbol.upper()
+    if not _SYMBOL_RE.fullmatch(symbol): return JSONResponse({"success": False, "error": "Invalid symbol"}, status_code=400)
     try:
-        engine = request.app.state.engine; db = request.app.state.db; market = engine.market
-        return await run_auto_tune(db, market, symbol)
-    except Exception as e: return {"success": False, "error": str(e)}
+        engine = _engine(request); return await run_auto_tune(request.app.state.db, engine.market, symbol)
+    except Exception as e: return JSONResponse({"success": False, "error": str(e)}, status_code=500)
