@@ -7,3 +7,6 @@ model.pkl
 __pycache__/
 *.pyc
 data/
+tests/
+.pytest_cache/
+*.md
