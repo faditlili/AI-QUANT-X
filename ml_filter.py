@@ -130,20 +130,25 @@ def train_model(frames):
         accuracy = float(check.score(test[list(FEATURES)], test["y"]))
         up_rate = float(test["y"].mean())
         baseline = max(up_rate, 1.0 - up_rate)
-        valid = accuracy >= config.ML_MIN_ACCURACY and accuracy >= baseline + 0.01
+        n_test = int(len(test))
+        # The edge over the naive baseline must be statistically meaningful (one-sided z >= 1.64, ~95%),
+        # not just +1 percentage point that a few hundred noisy rows can produce by luck.
+        sigma = (baseline * (1.0 - baseline) / n_test) ** 0.5 if n_test else 1.0
+        z = (accuracy - baseline) / sigma if sigma > 0 else 0.0
+        valid = accuracy >= config.ML_MIN_ACCURACY and accuracy >= baseline + 0.01 and z >= 1.64
 
         full = pd.concat([train, test])
         model = _build_model()
         model.fit(full[list(FEATURES)], full["y"])
         bundle = {"model": model, "features": list(FEATURES), "valid": bool(valid),
                   "accuracy": accuracy, "baseline": baseline, "rows": int(len(full)),
-                  "trained_at": time.time()}
+                  "test_rows": n_test, "z_score": float(z), "trained_at": time.time()}
         joblib.dump(bundle, _model_path())
         _cache["mtime"] = None
         _cache["bundle"] = None
-        log.info("[ML] trained on %d rows | holdout accuracy %.3f | baseline %.3f | %s",
-                 len(full), accuracy, baseline, "ACTIVE" if valid else "INACTIVE (no proven edge)")
-        return {"valid": bool(valid), "accuracy": accuracy, "baseline": baseline, "rows": int(len(full))}
+        log.info("[ML] trained on %d rows | holdout accuracy %.3f | baseline %.3f | z %.2f | %s",
+                 len(full), accuracy, baseline, z, "ACTIVE" if valid else "INACTIVE (no proven edge)")
+        return {"valid": bool(valid), "accuracy": accuracy, "baseline": baseline, "rows": int(len(full)), "z_score": float(z)}
     except Exception as error:
         log.exception("[ML] training failed: %s", error)
         return None
@@ -161,7 +166,8 @@ def _load_bundle():
         _cache["mtime"] = mtime
         _cache["bundle"] = bundle
         return bundle
-    except Exception:
+    except Exception as exc:
+        log.warning("[ML] could not load model: %s", exc)
         return None
 
 
@@ -194,5 +200,6 @@ def get_ml_probability(current_indicators):
             return None
         probability = float(model.predict_proba(feats)[0][classes.index(1)])
         return min(1.0, max(0.0, probability))
-    except Exception:
+    except Exception as exc:
+        log.debug("[ML] prediction unavailable: %s", exc)
         return None
