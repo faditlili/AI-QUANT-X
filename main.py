@@ -52,7 +52,7 @@ async def lifespan(app:FastAPI):
         db.close()
 
 app=FastAPI(title=config.APP_NAME,version=config.APP_VERSION,lifespan=lifespan)
-app.include_router(ui_router)
+app.include_router(ui_router)   # Dashboard Pro owns "/" and "/pro"; the old dashboard lives on "/legacy"
 app.include_router(router)
 
 # --- شاشة تسجيل الدخول الفخمة ---
@@ -79,21 +79,26 @@ async def login_page():
     </head>
     <body class="text-slate-200">
       <div class="glass-card p-8 w-full max-w-sm mx-4 relative overflow-hidden">
+        <!-- Scanline effect -->
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00f3ff] to-transparent animate-[scan_3s_linear_infinite]"></div>
+        
         <div class="text-center mb-8">
           <h1 class="text-3xl font-black text-white tracking-widest neon-text">AI QUANT <span style="color:#b026ff; text-shadow: 0 0 15px #b026ff;">X</span></h1>
           <p class="text-slate-400 text-xs uppercase tracking-widest mt-2 font-mono">System Authentication</p>
         </div>
+        
         <form action="/api/login" method="POST" class="space-y-6">
           <div>
             <label class="block text-[10px] font-mono uppercase text-slate-400 mb-2">Access Key</label>
-            <input type="password" name="password" required placeholder="••••••••••••"
+            <input type="password" name="password" required placeholder="••••••••••••" 
                    class="w-full liquid-input rounded-xl px-4 py-3 text-sm tracking-widest text-center transition-all">
           </div>
+          
           <button type="submit" class="w-full liquid-btn font-bold py-3 rounded-xl tracking-wider font-orbitron text-sm mt-4">
             INITIALIZE
           </button>
         </form>
+        
         <div class="mt-8 text-center border-t border-slate-800 pt-4">
             <p class="text-[9px] text-slate-600 font-mono">PAPER TRADING SIMULATION</p>
         </div>
@@ -135,6 +140,8 @@ async def dashboard_key_guard(request: Request, call_next):
 
     if not key and request.method not in ("GET", "HEAD", "OPTIONS") and path != "/api/login" \
             and not config.ALLOW_INSECURE_DASHBOARD:
+        # No DASHBOARD_KEY: the dashboard is read-only. Control actions (pause, close, backtest, auto-tune)
+        # need a key, otherwise anyone who finds the URL could drive the simulation.
         return JSONResponse({"detail": "Set DASHBOARD_KEY to enable control actions "
                                        "(or ALLOW_INSECURE_DASHBOARD=true for local use)"}, status_code=403)
     if key and path not in ("/health", "/login", "/api/login"):
@@ -174,4 +181,5 @@ async def health(request: Request):
     return JSONResponse(payload,status_code=200 if ready else 503)
 
 if __name__=="__main__":
+    # access_log=False: the access log would print "?key=<DASHBOARD_KEY>" URLs into the logs
     uvicorn.run(app,host=config.HOST,port=config.PORT,workers=1,access_log=False)
