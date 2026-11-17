@@ -9,7 +9,6 @@ from engine import Engine
 from telegram_bot import TelegramNotifier
 from dashboard import router
 from ui import router as ui_router
-from ui import router as ui_router
 import security
 
 # INFO إلى stdout (عادي)، والتحذيرات والأخطاء إلى stderr (تظهر حمراء في Railway)
@@ -25,10 +24,8 @@ if not config.DASHBOARD_KEY:
     logging.getLogger("security").warning("DASHBOARD_KEY is empty: the dashboard and its control buttons are open to anyone who knows the URL. Set DASHBOARD_KEY in Railway Variables.")
 
 def _client_ip(request: Request):
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return security.client_ip(request.headers.get("x-forwarded-for", ""),
+                              request.client.host if request.client else None, config.TRUSTED_PROXY)
 
 def _is_https(request: Request):
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
@@ -40,6 +37,11 @@ async def lifespan(app:FastAPI):
     telegram=TelegramNotifier(db,engine)
     app.state.db=db; app.state.engine=engine; app.state.telegram=telegram
     engine.notifier=telegram
+    storage=db.storage_info()
+    if storage["fallback_used"] or storage["on_mount"] is False and storage["path"].startswith("/data"):
+        logging.getLogger("storage").warning(
+            "Database %s is not on a persistent volume: it will be LOST on redeploy. Mount a Railway volume at /data.",
+            storage["path"])
     try:
         await engine.start()
         await telegram.start()
@@ -50,7 +52,6 @@ async def lifespan(app:FastAPI):
         db.close()
 
 app=FastAPI(title=config.APP_NAME,version=config.APP_VERSION,lifespan=lifespan)
-app.include_router(ui_router)  # new UI first: it takes over "/" (remove this line to get the old dashboard back)
 app.include_router(ui_router)
 app.include_router(router)
 
@@ -78,26 +79,21 @@ async def login_page():
     </head>
     <body class="text-slate-200">
       <div class="glass-card p-8 w-full max-w-sm mx-4 relative overflow-hidden">
-        <!-- Scanline effect -->
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00f3ff] to-transparent animate-[scan_3s_linear_infinite]"></div>
-        
         <div class="text-center mb-8">
           <h1 class="text-3xl font-black text-white tracking-widest neon-text">AI QUANT <span style="color:#b026ff; text-shadow: 0 0 15px #b026ff;">X</span></h1>
           <p class="text-slate-400 text-xs uppercase tracking-widest mt-2 font-mono">System Authentication</p>
         </div>
-        
         <form action="/api/login" method="POST" class="space-y-6">
           <div>
             <label class="block text-[10px] font-mono uppercase text-slate-400 mb-2">Access Key</label>
-            <input type="password" name="password" required placeholder="••••••••••••" 
+            <input type="password" name="password" required placeholder="••••••••••••"
                    class="w-full liquid-input rounded-xl px-4 py-3 text-sm tracking-widest text-center transition-all">
           </div>
-          
           <button type="submit" class="w-full liquid-btn font-bold py-3 rounded-xl tracking-wider font-orbitron text-sm mt-4">
             INITIALIZE
           </button>
         </form>
-        
         <div class="mt-8 text-center border-t border-slate-800 pt-4">
             <p class="text-[9px] text-slate-600 font-mono">PAPER TRADING SIMULATION</p>
         </div>
@@ -137,6 +133,10 @@ async def dashboard_key_guard(request: Request, call_next):
     key=config.DASHBOARD_KEY
     path=request.url.path
 
+    if not key and request.method not in ("GET", "HEAD", "OPTIONS") and path != "/api/login" \
+            and not config.ALLOW_INSECURE_DASHBOARD:
+        return JSONResponse({"detail": "Set DASHBOARD_KEY to enable control actions "
+                                       "(or ALLOW_INSECURE_DASHBOARD=true for local use)"}, status_code=403)
     if key and path not in ("/health", "/login", "/api/login"):
         supplied=request.query_params.get("key") or ""
         token=request.cookies.get("dash_key") or ""
@@ -161,10 +161,17 @@ async def dashboard_key_guard(request: Request, call_next):
 
 @app.get("/health")
 async def health(request: Request):
+    """Liveness for Railway. 200 once the engine runs; the body reports data/storage problems without secrets."""
     engine=getattr(request.app.state,"engine",None)
+    db=getattr(request.app.state,"db",None)
     ready=bool(engine and engine.running)
-    payload={"status":"ok" if ready else "starting","mode":"PAPER SIMULATION"}
+    payload={"status":"ok" if ready else "starting","mode":"PAPER SIMULATION","version":config.APP_VERSION}
+    if engine:
+        st=engine.get_status()
+        payload.update({"data_ok":st["data_ok"],"paused":st["paused"],"last_scan":st["last_scan"]})
+    if db:
+        payload["storage"]=db.storage_info()
     return JSONResponse(payload,status_code=200 if ready else 503)
 
 if __name__=="__main__":
-    uvicorn.run(app,host=config.HOST,port=config.PORT,workers=1)
+    uvicorn.run(app,host=config.HOST,port=config.PORT,workers=1,access_log=False)
