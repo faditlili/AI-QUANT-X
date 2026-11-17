@@ -22,8 +22,8 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("resume", self.cmd_resume))
             self.app.add_handler(CommandHandler("performance", self.cmd_performance))
             self.app.add_handler(CommandHandler("balance", self.cmd_balance))
-            self.app.add_handler(CommandHandler("risk", self.cmd_risk))
-            self.app.add_handler(CommandHandler("history", self.cmd_history))
+            self.app.add_handler(CommandHandler("risk", self.cmd_risk))          # <--- جديد
+            self.app.add_handler(CommandHandler("history", self.cmd_history))    # <--- جديد
             self.app.add_handler(CommandHandler("profit", self.cmd_profit))
             self.app.add_handler(CommandHandler("daily", self.cmd_daily))
             self.app.add_handler(CommandHandler("stats", self.cmd_stats))
@@ -31,8 +31,8 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("count", self.cmd_count))
             self.app.add_handler(CommandHandler("forceexit", self.cmd_forceexit))
             self.app.add_handler(CommandHandler("help", self.cmd_help))
-            self.app.add_handler(CallbackQueryHandler(self.handle_callback))
-
+            self.app.add_handler(CallbackQueryHandler(self.handle_callback)) 
+            
             await self.app.initialize()
             await self.app.start()
             await self.app.updater.start_polling()
@@ -285,12 +285,12 @@ class TelegramNotifier:
         query = update.callback_query
         await query.answer()
         data = query.data
-
+        
         if data == "toggle_pause":
             self.engine.set_paused(not self.engine.paused)
             status = "متوقف ⏸" if self.engine.paused else "يعمل ▶️"
             await query.edit_message_text(f"تم تغيير حالة البوت إلى: {status}")
-
+            
         elif data.startswith("close_"):
             try: pos_id = int(data.split("_", 1)[1])
             except (ValueError, IndexError):
@@ -314,7 +314,7 @@ class TelegramNotifier:
         try:
             await self.app.bot.send_message(chat_id=config.TELEGRAM_CHAT_ID, text=message, reply_markup=reply_markup)
             return True
-        except Exception as e:
+        except Exception as e: 
             log.error(f"Telegram send error: {e}")
             return False
 
