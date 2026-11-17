@@ -47,5 +47,18 @@ def register_failure(ip, now=None):
             _fails.pop(stale, None)
 
 
+def client_ip(forwarded_for, peer, trusted_proxy=True):
+    """Client address for rate limiting.
+
+    Behind Railway's proxy the LAST X-Forwarded-For hop is the one the proxy itself appended, so it
+    cannot be forged by the caller; the first hop can be set freely by an attacker to dodge the lockout.
+    """
+    if trusted_proxy and forwarded_for:
+        hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
+    return peer or "unknown"
+
+
 def clear_failures(ip):
     _fails.pop(ip, None)
