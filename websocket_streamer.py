@@ -1,96 +1,96 @@
-# websocket_streamer.py
-#
-# Add this line to requirements.txt:
-#     websockets
-
+"""Binance Futures all-market ticker stream (public). Prices carry a timestamp so a dead stream
+can never feed stale prices into stop-loss or entry decisions."""
 import asyncio
 import inspect
 import json
+import logging
+import time
 
-import websockets
+import config
 
-WS_URL = "wss://fstream.binance.com/ws/!ticker@arr"
+try:
+    import websockets
+except ImportError:           # the engine then runs on REST prices only
+    websockets = None
+
+log = logging.getLogger(__name__)
+
 PING_INTERVAL_SECONDS = 20
 PING_TIMEOUT_SECONDS = 20
 RECONNECT_MIN_DELAY = 1.0
 RECONNECT_MAX_DELAY = 60.0
 
-# Shared in-memory state: {"BTCUSDT": 97123.5, ...}
-live_prices = {}
+live_prices = {}    # {"BTCUSDT": (price, monotonic_timestamp)}
+stream_state = {"connected": False, "last_message": 0.0}
 
 
-def get_live_price(symbol):
-    """Return the latest streamed price for a symbol from memory (no network request).
-
-    Returns None if the symbol has not been received yet.
-    """
+def get_live_price(symbol, max_age=None):
+    """Latest streamed price, or None if unknown OR older than PRICE_MAX_AGE_SECONDS."""
     if not symbol:
         return None
-    return live_prices.get(str(symbol).upper())
+    item = live_prices.get(str(symbol).upper())
+    if not item:
+        return None
+    price, ts = item
+    max_age = config.PRICE_MAX_AGE_SECONDS if max_age is None else max_age
+    if time.monotonic() - ts > max_age:
+        return None
+    return price
 
 
 async def _call_callback(callback, symbol, price):
-    """Call the callback (sync or async) without letting its errors kill the stream."""
     try:
         result = callback(symbol, price)
         if inspect.isawaitable(result):
             await result
     except Exception as error:
-        print("[WS] callback error: " + str(error))
+        log.warning("WS callback error: %s", error)
 
 
 async def _handle_message(raw_message, callback):
-    """Parse one ticker-array message and update live_prices."""
     try:
         data = json.loads(raw_message)
     except (ValueError, TypeError):
         return
-
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list):
         return
-
+    now = time.monotonic()
+    stream_state["last_message"] = now
     for ticker in data:
         try:
-            symbol = ticker["s"]
-            price = float(ticker["c"])
+            symbol, price = ticker["s"], float(ticker["c"])
         except (KeyError, TypeError, ValueError):
             continue
-
-        live_prices[symbol] = price
+        if not price > 0 or price != price or price == float("inf"):
+            continue
+        live_prices[symbol] = (price, now)
         if callback is not None:
             await _call_callback(callback, symbol, price)
 
 
 async def start_price_stream(callback=None):
-    """Connect to the Binance Futures all-market ticker stream and keep live_prices updated.
-
-    callback(symbol, price) is optional and may be a normal or an async function.
-    Reconnects automatically (with exponential backoff) when the connection drops.
-    Runs forever; cancel the task to stop it.
-    """
+    """Keep live_prices updated; reconnect with exponential backoff. Runs until cancelled."""
+    if websockets is None:
+        log.warning("websockets package missing: using REST prices only")
+        return
     delay = RECONNECT_MIN_DELAY
-
     while True:
         try:
-            print("[WS] connecting to " + WS_URL)
-            async with websockets.connect(
-                WS_URL,
-                ping_interval=PING_INTERVAL_SECONDS,
-                ping_timeout=PING_TIMEOUT_SECONDS,
-                close_timeout=5,
-            ) as connection:
-                print("[WS] connected")
+            async with websockets.connect(config.WS_URL, ping_interval=PING_INTERVAL_SECONDS,
+                                          ping_timeout=PING_TIMEOUT_SECONDS, close_timeout=5) as connection:
+                stream_state["connected"] = True
+                log.info("WS connected")
                 async for raw_message in connection:
                     delay = RECONNECT_MIN_DELAY
                     await _handle_message(raw_message, callback)
-            print("[WS] connection closed by server")
+            log.warning("WS closed by server")
         except asyncio.CancelledError:
+            stream_state["connected"] = False
             raise
         except Exception as error:
-            print("[WS] connection error: " + str(error))
-
-        print("[WS] reconnecting in " + str(round(delay, 1)) + "s")
+            log.warning("WS error: %s", error)
+        stream_state["connected"] = False
         await asyncio.sleep(delay)
         delay = min(delay * 2.0, RECONNECT_MAX_DELAY)
