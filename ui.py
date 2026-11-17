@@ -94,7 +94,8 @@ async def _prices(engine, positions):
                 price = (rest[pos["source"]].get(pos["symbol"]) or {}).get("last_price")
             except Exception:
                 price = None
-        out[pos["id"]] = _f(price, _f(pos["entry_price"]))
+        # never fall back to the ENTRY price (it would show a fake 0 P&L): use the last stored mark
+        out[pos["id"]] = _f(price, _f(pos.get("mark_price"), _f(pos["entry_price"])))
     return out
 
 
@@ -109,7 +110,10 @@ def _position(pos, price):
     return {
         "id": pos["id"], "symbol": pos["symbol"], "source": pos["source"], "side": pos["side"],
         "entry": entry, "price": price, "stop": _f(pos["stop_price"]), "target": _f(pos["target_price"]),
-        "qty": qty, "margin": margin, "risk": _f(pos["risk_amount"]), "pnl": pnl,
+        "qty": qty, "margin": margin, "risk": _f(pos["risk_amount"]), "risk_initial": _f(pos.get("initial_risk")),
+        "pnl": pnl, "realized_partial": _f(pos.get("partial_pnl")), "funding": _f(pos.get("funding_paid")),
+        "leverage": _f(pos.get("leverage"), 1.0), "liquidation": pos.get("liquidation_price"),
+        "scaled_out": bool(pos.get("scale_out_done")),
         "pnl_pct": (pnl / margin * 100) if margin else 0.0,
         "r": ((price - entry) * sign / unit_risk) if unit_risk else 0.0,
         "opened": _epoch(pos["opened_at"]), "strategy": pos.get("strategy") or meta.get("strategy"),
@@ -138,16 +142,14 @@ async def pro_overview(request: Request):
         "perf": db.get_performance(),
         "status": engine.get_status(),
         "breadth": breadth,
-        "positions": [_position(p, prices.get(p["id"], _f(p["entry_price"]))) for p in positions],
+        "positions": [_position(p, prices.get(p["id"], _f(p.get("mark_price"), _f(p["entry_price"])))) for p in positions],
     }
 
 
 @router.get("/api/pro/equity")
 async def pro_equity(request: Request):
     db = request.app.state.db
-    with db.lock:
-        rows = db.conn.execute("SELECT equity, created_at FROM equity_snapshots ORDER BY id DESC LIMIT 2000").fetchall()
-    points = [{"t": _epoch(r["created_at"]), "v": _f(r["equity"])} for r in reversed(rows)]
+    points = [{"t": _epoch(r["created_at"]), "v": _f(r["equity"])} for r in db.equity_history(2000)]
     if len(points) > 400:
         step = len(points) / 400.0
         points = [points[int(i * step)] for i in range(400)] + [points[-1]]
@@ -162,11 +164,12 @@ async def pro_history(request: Request):
         if t["status"] != "CLOSED":
             continue
         meta = _meta(t)
-        risk = _f(t["risk_amount"])
+        risk = _f(t.get("initial_risk")) or _f(t["risk_amount"])   # the ORIGINAL risk, not what is left after a scale-out
         net = _f(t["net_pnl"])
         out.append({
             "id": t["id"], "symbol": t["symbol"], "source": t["source"], "side": t["side"],
             "entry": _f(t["entry_price"]), "exit": _f(t["exit_price"]), "pnl": net,
+            "gross": _f(t.get("gross_pnl")), "fees": _f(t.get("fees_total")), "funding": _f(t.get("funding_paid")),
             "r": (net / risk) if risk else 0.0, "reason": t["exit_reason"] or "",
             "opened": _epoch(t["opened_at"]), "closed": _epoch(t["closed_at"]),
             "strategy": t.get("strategy") or meta.get("strategy") or "-",
@@ -211,6 +214,7 @@ async def pro_system(request: Request):
         "version": config.APP_VERSION, "status": engine.get_status(), "ml": ml,
         "protection": {"blocked": bool(blocked), "reason": why}, "strategies": health,
         "symbols": len(config.SYMBOLS), "scan_every": config.SCAN_INTERVAL_SECONDS,
+        "storage": db.storage_info(), "integrity": db.integrity_report(),
         "risk": {"per_trade": config.RISK_PER_TRADE_PCT, "portfolio": config.MAX_PORTFOLIO_RISK_PCT,
                  "daily_limit": config.DAILY_LOSS_LIMIT_PCT, "max_drawdown": config.MAX_DRAWDOWN_PCT,
                  "max_positions": config.MAX_OPEN_POSITIONS},
