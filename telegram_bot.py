@@ -22,8 +22,8 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("resume", self.cmd_resume))
             self.app.add_handler(CommandHandler("performance", self.cmd_performance))
             self.app.add_handler(CommandHandler("balance", self.cmd_balance))
-            self.app.add_handler(CommandHandler("risk", self.cmd_risk))          # <--- جديد
-            self.app.add_handler(CommandHandler("history", self.cmd_history))    # <--- جديد
+            self.app.add_handler(CommandHandler("risk", self.cmd_risk))
+            self.app.add_handler(CommandHandler("history", self.cmd_history))
             self.app.add_handler(CommandHandler("profit", self.cmd_profit))
             self.app.add_handler(CommandHandler("daily", self.cmd_daily))
             self.app.add_handler(CommandHandler("stats", self.cmd_stats))
@@ -31,8 +31,8 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("count", self.cmd_count))
             self.app.add_handler(CommandHandler("forceexit", self.cmd_forceexit))
             self.app.add_handler(CommandHandler("help", self.cmd_help))
-            self.app.add_handler(CallbackQueryHandler(self.handle_callback)) 
-            
+            self.app.add_handler(CallbackQueryHandler(self.handle_callback))
+
             await self.app.initialize()
             await self.app.start()
             await self.app.updater.start_polling()
@@ -91,25 +91,23 @@ class TelegramNotifier:
         await update.effective_message.reply_text(
             f"🛡️ تقرير المخاطر:\n"
             f"الرصيد الحالي: {r['equity']:.2f}\n"
-            f"المخاطرة المفتوحة: {r['open_risk']:.2f} / {r['risk_cap']:.2f}\n"
+            f"المخاطرة المفتوحة: {r['open_risk']:.2f} / {r['risk_cap']:.2f} (المتبقي {r['risk_remaining']:.2f})\n"
             f"تغير اليوم: {r['daily_change']:+.2f}\n"
             f"حد الخسارة اليومي: {r['daily_loss_limit']:.2f}"
         )
 
     async def cmd_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self._guard(update): return
-        trades = self.db.get_recent_trades(200)
-        closed_trades = sorted([t for t in trades if t["status"] == "CLOSED"],
-                               key=lambda t: t["closed_at"] or "", reverse=True)[:10]
+        closed_trades = self.db.get_closed_trades(10)
         if not closed_trades:
             await update.effective_message.reply_text("لا توجد صفقات مغلقة مؤخراً.")
             return
         msg = f"📜 آخر {len(closed_trades)} صفقات مغلقة:\n\n"
         for t in closed_trades:
-            emoji = "🟢" if float(t['net_pnl']) > 0 else "🔴"
+            emoji = "🟢" if float(t['net_pnl'] or 0) > 0 else "🔴"
             hhmm = (t["closed_at"] or "")[11:16]
             msg += f"{emoji} {t['symbol']} | {t['side']} | {hhmm} UTC\n"
-            msg += f"PnL: {float(t['net_pnl']):+.2f} USDT ({t['exit_reason']})\n\n"
+            msg += f"PnL: {float(t['net_pnl'] or 0):+.2f} USDT ({t['exit_reason']})\n\n"
         await update.effective_message.reply_text(msg)
 
     async def cmd_positions(self,update,context):
@@ -118,8 +116,7 @@ class TelegramNotifier:
         if not rows:
             await update.effective_message.reply_text("لا توجد صفقات مفتوحة حالياً."); return
         for x in rows:
-            try: mark = float(self.db.get_state(f"mark:{x['id']}", 0) or 0)
-            except (TypeError, ValueError): mark = 0.0
+            mark = float(x.get("mark_price") or 0)
             sign = 1 if x["side"] == "LONG" else -1
             pnl = (mark - x["entry_price"]) * x["quantity"] * sign if mark else 0.0
             text = (f"#{x['id']} {x['source']} {x['symbol']} {x['side']}\nالكمية: {x['quantity']:.4g}\n"
@@ -137,8 +134,7 @@ class TelegramNotifier:
 
     # ---------- تقارير على طريقة Freqtrade ----------
     def _closed_trades(self, limit=5000):
-        rows = [t for t in self.db.get_recent_trades(limit) if t["status"] == "CLOSED"]
-        return sorted(rows, key=lambda t: t["closed_at"] or "")
+        return sorted(self.db.get_closed_trades(limit), key=lambda t: t["closed_at"] or "")
 
     @staticmethod
     def _strategy_of(t):
@@ -275,10 +271,9 @@ class TelegramNotifier:
         prices, done = {}, 0
         for p in positions:
             try:
-                if p["source"] not in prices: prices[p["source"]] = await self.engine.market.get_last_prices(p["source"])
-                item = prices[p["source"]].get(p["symbol"])
-                if not item: continue
-                res = self.engine.trader.close_position(p["id"], item["last_price"], "FORCE_EXIT")
+                price = await self.engine._live_price(p["symbol"], p["source"], prices)
+                if not price: continue
+                res = self.engine.trader.close_position(p["id"], price, "FORCE_EXIT")
                 if res:
                     done += 1; await self.notify_trade_closed(res)
             except Exception as exc:
@@ -290,43 +285,60 @@ class TelegramNotifier:
         query = update.callback_query
         await query.answer()
         data = query.data
-        
+
         if data == "toggle_pause":
             self.engine.set_paused(not self.engine.paused)
             status = "متوقف ⏸" if self.engine.paused else "يعمل ▶️"
             await query.edit_message_text(f"تم تغيير حالة البوت إلى: {status}")
-            
+
         elif data.startswith("close_"):
-            pos_id = int(data.split("_")[1])
+            try: pos_id = int(data.split("_", 1)[1])
+            except (ValueError, IndexError):
+                await query.edit_message_text("طلب غير صالح."); return
             pos = self.db.get_position(pos_id)
-            if pos and pos["status"] == "OPEN":
-                try:
-                    prices = await self.engine.market.get_last_prices(pos["source"])
-                    if pos["symbol"] in prices:
-                        price = prices[pos["symbol"]]["last_price"]
-                        closed = self.engine.trader.close_position(pos["id"], price, "MANUAL_TELEGRAM")
-                        if closed:
-                            await query.edit_message_text(f"✅ تم إغلاق {closed['symbol']} يدوياً.\nالربح: {float(closed['net_pnl']):+.2f} USDT")
-                except Exception as e:
-                    await query.edit_message_text(f"خطأ في الإغلاق: {e}")
+            if not pos or pos["status"] != "OPEN":
+                await query.edit_message_text("الصفقة مغلقة بالفعل أو غير موجودة."); return
+            try:
+                price = await self.engine._live_price(pos["symbol"], pos["source"])
+                if not price:
+                    await query.edit_message_text("❌ لا يتوفر سعر حي الآن؛ لم يتم الإغلاق. حاول لاحقاً."); return
+                closed = self.engine.trader.close_position(pos["id"], price, "MANUAL_TELEGRAM")
+                if closed:
+                    await query.edit_message_text(f"✅ تم إغلاق {closed['symbol']} يدوياً.\nالربح: {float(closed['net_pnl']):+.2f} USDT")
+            except Exception as e:
+                log.warning("Manual close failed: %s", e)
+                await query.edit_message_text("خطأ في الإغلاق، راجع السجلات.")
 
     async def send(self,message, reply_markup=None):
         if not self.enabled or not config.TELEGRAM_CHAT_ID: return False
         try:
             await self.app.bot.send_message(chat_id=config.TELEGRAM_CHAT_ID, text=message, reply_markup=reply_markup)
             return True
-        except Exception as e: 
+        except Exception as e:
             log.error(f"Telegram send error: {e}")
             return False
 
     async def notify_trade_opened(self, position):
         keyboard = [[InlineKeyboardButton("❌ إغلاق الصفقة", callback_data=f"close_{position['id']}")]]
-        text = (f"🟢 تم فتح صفقة جديدة\n{position['source']} | {position['symbol']} | {position['side']}\nسعر الدخول: {position['entry_price']:.4g}\nالمخاطرة: {position['risk_amount']:.2f} USDT")
+        text = (f"🟢 تم فتح صفقة جديدة (محاكاة)\n{position['source']} | {position['symbol']} | {position['side']}\n"
+                f"سعر الدخول: {position['entry_price']:.6g}\nوقف الخسارة: {position['stop_price']:.6g}\nالهدف: {position['target_price']:.6g}\n"
+                f"الكمية: {position['quantity']:.6g}\nالمخاطرة: {position['risk_amount']:.2f} USDT")
         return await self.send(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     async def notify_trade_closed(self, position):
-        text = (f"🔴 تم إغلاق صفقة\n{position['source']} | {position['symbol']} | {position['side']}\nسعر الخروج: {float(position['exit_price']):.4g}\nصافي الربح: {float(position['net_pnl']):+.4f} USDT\nالسبب: {position.get('exit_reason')}")
+        risk = float(position.get("initial_risk") or 0)
+        r_txt = f"\nR: {float(position['net_pnl']) / risk:+.2f}" if risk > 0 else ""
+        text = (f"🔴 تم إغلاق صفقة\n{position['source']} | {position['symbol']} | {position['side']}\nسعر الخروج: {float(position['exit_price']):.6g}\n"
+                f"صافي الربح (بعد الرسوم): {float(position['net_pnl']):+.4f} USDT{r_txt}\nالسبب: {position.get('exit_reason')}")
         return await self.send(text)
+
+    async def notify_event(self, event):
+        """Partial closes (scale-out) and similar events from the paper trader."""
+        pos = event.get("position") or {}
+        if event.get("type") == "SCALE_OUT":
+            return await self.send(f"🟡 إغلاق جزئي\n{pos.get('symbol')} | {pos.get('side')}\nالكمية المغلقة: {event['quantity']:.6g} عند {event['price']:.6g}\n"
+                                   f"تم نقل الوقف إلى نقطة التعادل: {pos.get('stop_price', 0):.6g}")
+        return False
 
     async def close(self):
         if self.app:
