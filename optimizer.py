@@ -131,5 +131,7 @@ async def run_auto_tune(db, market, symbol="BTCUSDT"):
         "trades": test.get("trades", 0),
         "train_return_pct": train.get("return_pct", 0),
         "train_trades": train.get("trades", 0),
-        "note": "Numbers are out-of-sample (unseen data).",
+        "note": ("Numbers are out-of-sample (unseen last %d%% of the history) for the best of %d tested combinations; "
+                 "selection among many candidates still carries multiple-testing risk, so treat it as a hint, not proof." % (
+                     int(config.AUTOTUNE_TEST_FRACTION * 100), stats["tested"])),
     }
