@@ -35,7 +35,9 @@ def _ema_fast():
     v = getattr(_override, "ema_fast", None)
     return config.EMA_FAST if v is None else int(v)
 
-def _clean(frame):
+def _clean(frame, strict=False):
+    """Validate and normalise OHLCV. strict=True (live path) refuses frames with invalid rows or
+    missing candles instead of silently repairing them: a gap would shift every indicator."""
     if isinstance(frame, pd.DataFrame):
         df = frame.copy()
     else:
@@ -47,10 +49,20 @@ def _clean(frame):
         raise IndicatorError("Missing OHLCV columns")
     for col in required:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    before = len(df)
     df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=required)
-    df = df[(df[["open","high","low","close"]] > 0).all(axis=1) & (df["volume"] >= 0)]
+    df = df[(df[["open","high","low","close"]] > 0).all(axis=1) & (df["volume"] >= 0)
+            & (df["high"] >= df["low"]) & (df["high"] >= df[["open","close"]].max(axis=1))
+            & (df["low"] <= df[["open","close"]].min(axis=1))]
+    if strict and len(df) != before:
+        raise IndicatorError("Invalid candle(s) in the data")
     if "timestamp" in df.columns:
         df = df.drop_duplicates("timestamp").sort_values("timestamp")
+        if strict and len(df) > 3:
+            gaps = df["timestamp"].diff().tail(100).dropna()
+            step = gaps.median()
+            if step > 0 and (gaps > step * 1.5).any():
+                raise IndicatorError("Missing candles in the data")
     if len(df) < max(config.MIN_CANDLES_REQUIRED, config.EMA_SLOW + 5):
         raise IndicatorError("Insufficient valid candles")
     return df.reset_index(drop=True)
@@ -58,8 +70,8 @@ def _clean(frame):
 def _pctile_of_last(window):
     return float((window <= window[-1]).mean() * 100)
 
-def compute_frame(frame):
-    df = _clean(frame)
+def compute_frame(frame, strict=False):
+    df = _clean(frame, strict)
     close, high, low = df.close, df.high, df.low
     
     rsi_period = _rsi_period()
@@ -147,7 +159,7 @@ def snapshot(df, i=-1):
     return out
 
 def calculate_indicators(frame):
-    df = compute_frame(frame)
+    df = compute_frame(frame, strict=True)
     result = snapshot(df)
     if not all(np.isfinite(v) for v in result.values() if isinstance(v, (int, float))):
         raise IndicatorError("Non-finite indicator result")
