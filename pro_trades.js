@@ -7,7 +7,7 @@
     function at(v) { return Math.max(0, Math.min(100, ((v - lo) / sp) * 100)); }
     var a = at(p.stop), e = at(p.entry), t = at(p.target);
     return '<div class="rbar"><div class="z1" style="left:' + Math.min(a, e) + "%;width:" + Math.abs(e - a) + '%"></div><div class="z2" style="left:' +
-      Math.min(e, t) + "%;width:" + Math.abs(t - e) + '%"></div><i class="mk" style="left:' + e + '%"></i><i class="mk now" style="left:' + at(p.price) + '%"></i></div>';
+      Math.min(e, t) + "%;width:" + Math.abs(e - t) + '%"></div><i class="mk" style="left:' + e + '%"></i><i class="mk now" style="left:' + at(p.price) + '%"></i></div>';
   }
   function kv(k, v, cls) { return "<div><span>" + k + '</span><b class="num ' + (cls || "") + '">' + v + "</b></div>"; }
 
