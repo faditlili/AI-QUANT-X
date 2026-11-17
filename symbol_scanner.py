@@ -1,64 +1,51 @@
-# symbol_scanner.py
-#
-# No new line is needed in requirements.txt (aiohttp is already used by the bot).
+"""Dynamic watch-list from Binance Futures 24h tickers (public data)."""
+import logging
 
 import aiohttp
 
-TICKER_URL = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+import config
+
+log = logging.getLogger(__name__)
+
 MIN_QUOTE_VOLUME = 50000000.0
 MIN_ABS_CHANGE_PERCENT = 3.0
 TOP_COUNT = 50
 REQUEST_TIMEOUT_SECONDS = 15
 
 
-def _fallback_symbols():
-    """Return the default symbol list from config.SYMBOLS (empty list if unavailable)."""
-    try:
-        import config
-        return list(getattr(config, "SYMBOLS", []))
-    except Exception:
-        return []
-
-
 async def get_top_symbols():
-    """Scan Binance Futures and return the top 50 liquid and volatile USDT symbols.
+    """Top liquid and volatile USDT perpetuals, highest quote volume first.
 
-    Filters: symbol ends with USDT, 24h quote volume > 50M USD,
-    absolute 24h price change > 3%. Sorted by quote volume (highest first).
-    On any failure (or if nothing passes the filters) it returns config.SYMBOLS.
+    Returns None when the data could not be fetched or nothing passed the filters, so the caller
+    keeps its current list and can tell that no refresh happened (instead of "refreshing" to a fallback).
     """
     try:
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(TICKER_URL) as response:
+        async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": config.USER_AGENT}) as session:
+            url = config.BINANCE_FUTURES_BASE_URL + config.FUTURES_TICKER_24H_PATH
+            async with session.get(url) as response:
                 if response.status != 200:
-                    print("[SCANNER] bad status: " + str(response.status))
-                    return _fallback_symbols()
+                    log.warning("Symbol scanner: HTTP %s", response.status)
+                    return None
                 tickers = await response.json()
-
-        if not isinstance(tickers, list):
-            return _fallback_symbols()
-
-        candidates = []
-        for ticker in tickers:
-            try:
-                symbol = ticker["symbol"]
-                if not symbol.endswith("USDT"):
-                    continue
-                quote_volume = float(ticker["quoteVolume"])
-                change_percent = float(ticker["priceChangePercent"])
-            except (KeyError, TypeError, ValueError):
-                continue
-
-            if quote_volume > MIN_QUOTE_VOLUME and abs(change_percent) > MIN_ABS_CHANGE_PERCENT:
-                candidates.append((quote_volume, symbol))
-
-        if not candidates:
-            print("[SCANNER] no symbol passed the filters, using default list")
-            return _fallback_symbols()
-
-        candidates.sort(key=lambda pair: pair[0], reverse=True)
-        return [symbol for _, symbol in candidates[:TOP_COUNT]]
     except Exception as error:
-        print("[SCANNER] failed: " + str(error))
-        return _fallback_symbols()
+        log.warning("Symbol scanner failed: %s", error)
+        return None
+    if not isinstance(tickers, list):
+        return None
+    candidates = []
+    for t in tickers:
+        try:
+            symbol = t["symbol"]
+            if not symbol.endswith("USDT") or any(k in symbol for k in config.EXCLUDED_KEYWORDS):
+                continue
+            qv, chg = float(t["quoteVolume"]), float(t["priceChangePercent"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if qv > MIN_QUOTE_VOLUME and abs(chg) > MIN_ABS_CHANGE_PERCENT:
+            candidates.append((qv, symbol))
+    if not candidates:
+        log.info("Symbol scanner: nothing passed the filters; keeping the current list")
+        return None
+    candidates.sort(reverse=True)
+    return [s for _, s in candidates[:TOP_COUNT]]
