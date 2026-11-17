@@ -36,7 +36,7 @@ class NewsEngine:
         relevant=[x for x in self.items if not symbol or symbol[:3].lower() in x.lower()]
         hits=sum(any(word in x.lower() for word in RISK_WORDS) for x in relevant)
         risk=min(1.0,hits/max(1,len(relevant))) if relevant else 0.0
-        return {"available":True,"risk":risk,"summary":" | ".join(relevant[:3])}
+        return {"available":bool(config.NEWS_ENABLED and self.updated),"risk":risk,"summary":" | ".join(relevant[:3])}
 
     def get_status(self):
         return {"enabled":config.NEWS_ENABLED,"items":len(self.items),"updated":self.updated}
