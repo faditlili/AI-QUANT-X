@@ -106,9 +106,13 @@ def _side_filters(name, cand, ctx):
     hard, soft = [], []
 
     # HARD 1: crowded funding
-    if getattr(config, "USE_FUNDING_RATE_FILTER", False):
-        funding = ctx.get("funding_rate", 0.0)
-        if is_long and funding > config.MAX_LONG_FUNDING_RATE:
+    # The key being ABSENT means "not available in this context" (e.g. backtest, spot) and the filter is
+    # skipped; the key present with None means the live lookup FAILED, so a futures entry is blocked.
+    if getattr(config, "USE_FUNDING_RATE_FILTER", False) and ctx.get("source") == "futures" and "funding_rate" in ctx:
+        funding = ctx.get("funding_rate")
+        if funding is None:
+            hard.append("Funding rate unavailable")
+        elif is_long and funding > config.MAX_LONG_FUNDING_RATE:
             hard.append(f"Funding high ({funding:.4f})")
         elif (not is_long) and funding < config.MIN_SHORT_FUNDING_RATE:
             hard.append(f"Funding low ({funding:.4f})")
@@ -132,16 +136,18 @@ def _side_filters(name, cand, ctx):
 
     # HARD 4: News Sentiment
     if getattr(config, "USE_SENTIMENT_FILTER", False):
-        sent = ctx.get("sentiment", {})
-        sent_score = sent.get("score", 0.0)
-        if is_long and sent_score <= config.SENTIMENT_BEARISH_BLOCK:
+        sent = ctx.get("sentiment") or {}
+        sent_score = sent.get("score")
+        if sent_score is None:
+            pass   # sentiment unavailable: no opinion (it is an optional context filter)
+        elif is_long and sent_score <= config.SENTIMENT_BEARISH_BLOCK:
             hard.append(f"News is too Bearish ({sent_score:.2f})")
         elif (not is_long) and sent_score >= config.SENTIMENT_BULLISH_BLOCK:
             hard.append(f"News is too Bullish ({sent_score:.2f})")
 
     # HARD 5: Volume Anomaly (Whale)
     if getattr(config, "USE_VOLUME_ANOMALY_FILTER", True):
-        anomaly = ctx.get("vol_anomaly", {})
+        anomaly = ctx.get("vol_anomaly") or {}
         if anomaly.get("anomaly") and anomaly.get("intensity") in ("HIGH", "EXTREME"):
             if is_long and anomaly.get("direction") == "SELLING_WHALE":
                 hard.append(f"Selling Whale detected (Z: {anomaly.get('z_score')})")
@@ -160,18 +166,18 @@ def _side_filters(name, cand, ctx):
 
     # SOFT: market sentiment and breadth
     if name != "dip_buyer":
-        fng = ctx.get("fear_greed", 50)
-        breadth = ctx.get("breadth", 50.0)
+        fng = ctx.get("fear_greed")        # None = unavailable -> no opinion (never a made-up 50)
+        breadth = ctx.get("breadth")
         if is_long:
-            if fng > config.FEAR_GREED_MAX_LONG: soft.append("Extreme Greed")
-            if breadth < config.BREADTH_MIN_LONG: soft.append("Weak Breadth")
+            if fng is not None and fng > config.FEAR_GREED_MAX_LONG: soft.append("Extreme Greed")
+            if breadth is not None and breadth < config.BREADTH_MIN_LONG: soft.append("Weak Breadth")
         else:
-            if fng < config.FEAR_GREED_MIN_SHORT: soft.append("Extreme Fear")
-            if breadth > config.BREADTH_MAX_SHORT: soft.append("Strong Breadth")
+            if fng is not None and fng < config.FEAR_GREED_MIN_SHORT: soft.append("Extreme Fear")
+            if breadth is not None and breadth > config.BREADTH_MAX_SHORT: soft.append("Strong Breadth")
 
     # SOFT: Order Book Liquidity Walls
     if getattr(config, "USE_ORDER_BOOK_FILTER", False):
-        ob = ctx.get("order_book", {})
+        ob = ctx.get("order_book") or {}
         if is_long and ob.get("resistance_strength") == "STRONG":
             soft.append("Strong Ask Wall")
         elif (not is_long) and ob.get("support_strength") == "STRONG":
@@ -228,7 +234,7 @@ def select_signal(ctx, enabled=None):
         
         tech = {"score": cand["score"], "side": cand["side"], "reasons": cand["reasons"]}
         if blockers:
-            tech["blocked_reason"] = " | ".join(blockers)
+            tech["blockers"] = list(blockers)   # decision_engine reports these as the reason for the HOLD
             
         res = evaluate_setup(tech, ctx["source"], confirmed, ctx.get("news_risk", 0.0))
         results.append((cand, res))
@@ -236,6 +242,14 @@ def select_signal(ctx, enabled=None):
     entries = [(c, r) for c, r in results if r["action"] != "HOLD"]
     if entries:
         cand, res = max(entries, key=lambda x: x[0]["score"])
+        # Opposite-side signals from different strategies must not be resolved by a coin flip.
+        opposite = [c for c, r in entries if c["side"] != cand["side"]]
+        if opposite:
+            gap = cand["score"] - max(c["score"] for c in opposite)
+            if gap < config.CONFLICT_MIN_SCORE_GAP:
+                hold = dict(res, action="HOLD", reason="Conflicting strategy signals (gap %d < %d)" % (gap, config.CONFLICT_MIN_SCORE_GAP))
+                hold.pop("side", None)
+                return _decision(regime, cand, hold)
         return _decision(regime, cand, res)
     if results:
         cand, res = max(results, key=lambda x: x[0]["score"])
