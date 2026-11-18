@@ -17,9 +17,9 @@ from decimal import Decimal, ROUND_DOWN
 
 import config
 
-HARD_MAX_PORTFOLIO_RISK_PCT = 10.0
+HARD_MAX_PORTFOLIO_RISK_PCT = 10.0   # the specification's absolute ceiling; config cannot exceed it
 EPS = 1e-9
-CASH_BUFFER = 0.999
+CASH_BUFFER = 0.999                  # keep 0.1% of cash unspent so rounding never overdraws
 
 
 def is_valid_number(x):
@@ -47,6 +47,7 @@ def fee_rate(source, fee=None):
 
 
 def entry_fill(price, side, slippage_bps=None):
+    """Market entry: slippage always makes the fill worse for the trader."""
     return price * (1 + side_sign(side) * slip_rate(slippage_bps))
 
 
@@ -59,6 +60,7 @@ def gross_pnl(side, entry, exit_price, qty):
 
 
 def stop_risk(side, entry, stop, qty, source, fee=None, slippage_bps=None, entry_fee=0.0):
+    """Worst-case loss if the stop is hit (price move + exit fee + exit slippage [+ entry fee])."""
     f = fee_rate(source, fee)
     s = slip_rate(slippage_bps)
     move = side_sign(side) * (entry - stop) * qty
@@ -66,10 +68,9 @@ def stop_risk(side, entry, stop, qty, source, fee=None, slippage_bps=None, entry
 
 
 def position_open_risk(pos, fee=None, slippage_bps=None):
-    return stop_risk(
-        pos["side"], float(pos["entry_price"]), float(pos["stop_price"]),
-        float(pos["quantity"]), pos["source"], fee, slippage_bps
-    )
+    """Open risk of a stored/in-memory position dict using its CURRENT stop and remaining quantity."""
+    return stop_risk(pos["side"], float(pos["entry_price"]), float(pos["stop_price"]),
+                     float(pos["quantity"]), pos["source"], fee, slippage_bps)
 
 
 def total_open_risk(positions, fee=None, slippage_bps=None):
@@ -82,6 +83,7 @@ def portfolio_risk_cap(equity):
 
 
 def liquidation_price(side, entry, leverage, maintenance_rate=None):
+    """Isolated-margin liquidation price (simplified: no insurance-fund / tiered maintenance margin)."""
     mmr = config.MAINTENANCE_MARGIN_RATE if maintenance_rate is None else maintenance_rate
     lev = max(1.0, float(leverage))
     if side == "LONG":
@@ -90,6 +92,7 @@ def liquidation_price(side, entry, leverage, maintenance_rate=None):
 
 
 def funding_payment(side, notional, rate):
+    """Positive = trader PAYS. Long pays when rate>0, short receives (and vice versa)."""
     return side_sign(side) * notional * rate
 
 
@@ -108,53 +111,47 @@ def round_to_tick(value, tick):
 
 def size_position(*, equity, cash, entry, stop, side, source, risk_budget, leverage=1.0,
                   alloc_pct=None, fee=None, slippage_bps=None, rules=None):
+    """Return (sizing dict | None, reason).
+
+    entry is the EXPECTED FILL price (slippage already applied). risk_budget is in USDT.
+    The result risk includes round-trip costs so that a stop-out can never exceed risk_budget.
+    """
     if not (is_valid_price(entry) and is_valid_price(stop)):
         return None, "Invalid entry or stop price"
     if side_sign(side) * (entry - stop) <= 0:
         return None, "Stop is on the wrong side of entry"
     if risk_budget <= 0:
         return None, "No risk budget left"
-
     f = fee_rate(source, fee)
     s = slip_rate(slippage_bps)
     lev = max(1.0, float(leverage)) if source == "futures" else 1.0
     alloc = config.MAX_ALLOCATION_PCT if alloc_pct is None else alloc_pct
-
     per_unit_risk = side_sign(side) * (entry - stop) + stop * (f + s) + entry * f
     qty = risk_budget / per_unit_risk
     qty = min(qty, max(0.0, equity) * alloc / 100.0 * lev / entry)
     qty = min(qty, cash * CASH_BUFFER / (entry / lev + entry * f))
-
     if rules:
         qty = floor_to_step(qty, rules.get("step"))
         if qty < (rules.get("min_qty") or 0):
             return None, "Below exchange minimum quantity"
-
     notional = qty * entry
     min_notional = max(config.MIN_NOTIONAL_USDT, (rules or {}).get("min_notional") or 0)
     if qty <= 0 or notional < min_notional:
         return None, "Insufficient virtual cash or below minimum notional"
-
     entry_fee = notional * f
     margin = notional / lev
-    risk = stop_risk(
-        side, entry, stop, qty, source, f, slippage_bps, entry_fee=entry_fee
-    )
-
-    return {
-        "quantity": qty,
-        "notional": notional,
-        "margin_used": margin,
-        "opening_fee": entry_fee,
-        "risk_amount": risk,
-        "initial_risk": qty * abs(entry - stop),
-        "leverage": lev,
-        "liquidation_price": liquidation_price(side, entry, lev)
-            if source == "futures" else None
-    }, ""
+    risk = stop_risk(side, entry, stop, qty, source, f, slippage_bps, entry_fee=entry_fee)
+    return {"quantity": qty, "notional": notional, "margin_used": margin, "opening_fee": entry_fee,
+            "risk_amount": risk, "initial_risk": qty * abs(entry - stop), "leverage": lev,
+            "liquidation_price": liquidation_price(side, entry, lev) if source == "futures" else None}, ""
 
 
 def check_portfolio_limits(*, equity, cash, positions, cand, daily_change=0.0, daily_limit=None):
+    """Single source of truth for every HARD entry limit. Returns (ok, reason).
+
+    positions: open positions (dicts with symbol, source, side, quantity, entry_price, stop_price).
+    cand: dict with symbol, source, side, margin_used, opening_fee, risk_amount.
+    """
     if cand["source"] not in ("spot", "futures") or cand["side"] not in ("LONG", "SHORT"):
         return False, "Invalid market or side"
     if cand["source"] == "spot" and cand["side"] == "SHORT":
@@ -171,15 +168,12 @@ def check_portfolio_limits(*, equity, cash, positions, cand, daily_change=0.0, d
         return False, f"Maximum {cand['side']} positions reached"
     if cand["margin_used"] + cand["opening_fee"] > cash + EPS:
         return False, "Insufficient cash"
-
     cap = portfolio_risk_cap(equity)
     open_risk = total_open_risk(positions)
     if open_risk + cand["risk_amount"] > cap + EPS:
         return False, "Aggregate risk cap exceeded"
-
     dir_cap = min(equity * config.MAX_DIRECTIONAL_HEAT_PCT / 100.0, cap)
     dir_risk = total_open_risk([p for p in positions if p["side"] == cand["side"]])
     if dir_risk + cand["risk_amount"] > dir_cap + EPS:
         return False, f"Heat Blocked: Max {cand['side']} risk reached"
-
     return True, ""
