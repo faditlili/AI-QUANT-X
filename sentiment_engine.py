@@ -27,13 +27,14 @@ MAX_HEADLINES_PER_FEED = 20
 TOP_NEWS_COUNT = 5
 REQUEST_TIMEOUT_SECONDS = 10
 CACHE_SECONDS = 300
+FAILURE_RETRY_SECONDS = 60   # after a failed refresh, do not retry (10s feed timeouts!) for every symbol of a scan
 BULLISH_THRESHOLD = 0.15
 BEARISH_THRESHOLD = -0.15
 log = logging.getLogger(__name__)
 USER_AGENT = "Mozilla/5.0 (compatible; AIQuantX/1.0)"
 
 _analyzer = None
-_cache = {"time": None, "result": None}
+_cache = {"time": None, "result": None, "retry_at": 0.0}
 
 
 def _neutral_result():
@@ -122,10 +123,13 @@ async def get_market_sentiment():
         if _cache["result"] is not None and _cache["time"] is not None:
             if now - _cache["time"] < CACHE_SECONDS:
                 return _cache["result"]
+        if now < _cache["retry_at"]:
+            return None          # the last refresh failed moments ago: no opinion, and no new network round-trip
 
         loop = asyncio.get_running_loop()
         analyzer = await loop.run_in_executor(None, _get_analyzer)
         if analyzer is None:
+            _cache["retry_at"] = now + FAILURE_RETRY_SECONDS
             return None
 
         timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
@@ -144,12 +148,15 @@ async def get_market_sentiment():
                     headlines.append(headline)
 
         if not headlines:
+            _cache["retry_at"] = now + FAILURE_RETRY_SECONDS
             return None
 
         result = _analyze(analyzer, headlines)
         _cache["time"] = now
         _cache["result"] = result
+        _cache["retry_at"] = 0.0
         return result
     except Exception as error:
         log.warning("Sentiment failed: %s", error)
+        _cache["retry_at"] = time.monotonic() + FAILURE_RETRY_SECONDS
         return None
