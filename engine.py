@@ -28,6 +28,8 @@ from websocket_streamer import get_live_price, start_price_stream, stream_state
 
 log = logging.getLogger(__name__)
 
+AUX_CHECK_TIMEOUT_SECONDS = 20   # upper bound for the whale-exit / funding checks inside one monitor cycle
+
 
 class Engine:
     def __init__(self, database, market=None, news=None):
@@ -315,8 +317,16 @@ class Engine:
                 log.warning("Funding settlement failed for %s: %s", p["symbol"], exc)
 
     async def monitor_positions(self):
-        await self.check_whale_emergency_exit()
-        await self.settle_funding()
+        # Stops/targets are evaluated FIRST: they must never wait behind the whale/funding checks, which make
+        # network calls that can take minutes when the API is slow (retries x 12s timeout x open positions).
+        await self._check_stops()
+        for job in (self.check_whale_emergency_exit, self.settle_funding):
+            try:
+                await asyncio.wait_for(job(), AUX_CHECK_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                log.warning("%s timed out after %ss; stops are unaffected", job.__name__, AUX_CHECK_TIMEOUT_SECONDS)
+
+    async def _check_stops(self):
         open_positions = self.db.get_open_positions()
         if not open_positions:
             self._price_fail_since, self._alerted_outage = None, False
