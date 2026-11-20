@@ -162,7 +162,17 @@ PRICE_MAX_AGE_SECONDS = float(os.getenv("PRICE_MAX_AGE_SECONDS", "30"))    # Web
 DATA_STALE_SECONDS = float(os.getenv("DATA_STALE_SECONDS", "300"))         # no fresh prices this long -> block new entries
 SYMBOL_INFO_TTL_SECONDS = int(os.getenv("SYMBOL_INFO_TTL_SECONDS", "21600"))
 KLINE_CACHE_SECONDS = float(os.getenv("KLINE_CACHE_SECONDS", "20"))
-WS_URL = os.getenv("BINANCE_WS_URL", "wss://fstream.binance.com/ws/!ticker@arr")
+
+
+def _ws_url(url):
+    """Binance retired the legacy USDⓈ-M futures WebSocket paths (wss://fstream.binance.com/ws, /stream) on
+    2026-04-23: regular market streams now live under /market. A legacy URL, e.g. left in an old
+    BINANCE_WS_URL variable, is rewritten so the price stream cannot silently stay dead."""
+    return url.replace("://fstream.binance.com/ws/", "://fstream.binance.com/market/ws/", 1)
+
+
+# !miniTicker@arr replaces the deprecated !ticker@arr; both carry the symbol ("s") and last price ("c") we read.
+WS_URL = _ws_url(os.getenv("BINANCE_WS_URL", "wss://fstream.binance.com/market/ws/!miniTicker@arr"))
 
 # --- Dashboard security ---
 ALLOW_INSECURE_DASHBOARD = _bool("ALLOW_INSECURE_DASHBOARD", False)  # allow control POSTs without DASHBOARD_KEY
