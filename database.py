@@ -382,9 +382,17 @@ class Database:
             row = c.execute("SELECT * FROM positions WHERE id=? AND status='OPEN'", (pid,)).fetchone()
             if not row:
                 return None
-            self._cash_move(c, -amount, "FUNDING", pid, note)
+            # Funding is paid from free cash; if the account is fully allocated the shortfall comes out of this
+            # position's own margin (isolated-margin behaviour) so cash can never go negative. Equity, realised
+            # P&L and the ledger identities are unchanged: cash + margin falls by exactly `amount`.
+            cash = float(self._state(c, "cash_balance", 0))
+            from_margin = 0.0
+            if amount > 0 and amount > max(cash, 0.0):
+                from_margin = min(amount - max(cash, 0.0), float(row["margin_used"]) * 0.9)
+            self._cash_move(c, -(amount - from_margin), "FUNDING", pid, note)
             self._put_state(c, "realized_pnl", repr(float(self._state(c, "realized_pnl", 0)) - amount))
-            c.execute("UPDATE positions SET funding_paid=COALESCE(funding_paid,0)+? WHERE id=?", (amount, pid))
+            c.execute("UPDATE positions SET funding_paid=COALESCE(funding_paid,0)+?, margin_used=margin_used-? WHERE id=?",
+                      (amount, from_margin, pid))
         return self.get_position(pid)
 
     # ------------------------------------------------------------------ misc
