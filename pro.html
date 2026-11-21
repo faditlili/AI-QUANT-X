@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#05070f">
+<meta name="theme-color" content="#000000">
 <title>AI QUANT X</title>
 <link rel="stylesheet" href="/pro/pro.css">
 </head>
 <body>
 <div id="boot"></div>
 <header id="top"></header>
+<div id="sub"></div>
 <main id="view"></main>
 <nav id="tabs"></nav>
 <div id="sheet"></div>
@@ -18,12 +19,14 @@
 <script src="/pro/pro_core.js"></script>
 <script src="/pro/pro_charts.js"></script>
 <script src="/pro/pro_overview.js"></script>
+<script src="/pro/pro_markets.js"></script>
 <script src="/pro/pro_trades.js"></script>
 <script src="/pro/pro_signals.js"></script>
 <script src="/pro/pro_tools.js"></script>
+<script src="/pro/pro_more.js"></script>
 <script>
 (function () {
-  var need = ["i18n", "core", "charts", "overview", "trades", "signals", "tools"];
+  var need = ["i18n", "core", "charts", "overview", "markets", "trades", "signals", "tools", "more"];
   var have = window.__mods || [];
   var miss = need.filter(function (m) { return have.indexOf(m) < 0; });
   var list = miss.map(function (m) { return "pro_" + m + ".js"; });
