@@ -862,7 +862,7 @@ async def live_tickers(request: Request):
     try:
         tickers = await _engine(request).market.get_tickers_24h("futures"); out = []
         for s in list(config.SYMBOLS):
-            if s in tickers: out.append({"symbol": s.replace("USDT", ""), "price": tickers[s]["last_price"], "change": round(tickers[s]["change_percent"], 2)})
+            if s in tickers: out.append({"symbol": s.replace("USDT", ""), "price": tickers[s]["last_price"], "change": round(tickers[s]["change_percent"], 2), "volume": tickers[s].get("quote_volume")})
         return out
     except Exception as exc:
         return JSONResponse({"error": f"tickers unavailable: {exc}"}, status_code=502)
