@@ -11,13 +11,32 @@ def _bool(name, default):
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _number(name, default, cast):
+    raw = os.getenv(name, default)
+    try:
+        return cast(str(raw).strip())
+    except (TypeError, ValueError):
+        raise ValueError("%s must be %s, got %r (use a dot for decimals, e.g. 2.5)"
+                         % (name, "a whole number" if cast is int else "a number", raw)) from None
+
+
+def _int(name, default):
+    return _number(name, default, int)
+
+
+def _float(name, default):
+    return _number(name, default, float)
+
+
 APP_NAME = "AI QUANT X"
 APP_VERSION = "7.2.0"
 PAPER_MODE = True
+# The old /legacy page loads third-party scripts (unpinned CDN) into the authenticated origin: opt-in only.
+ENABLE_LEGACY_DASHBOARD = _bool("ENABLE_LEGACY_DASHBOARD", False)
 TRADING_MODE = "PAPER SIMULATION"
 
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "8080"))
+PORT = _int("PORT", "8080")
 DB_PATH = os.getenv("DB_PATH", "/data/ai_quant_x.db")
 
 BINANCE_SPOT_BASE_URL = "https://api.binance.com"
@@ -42,7 +61,7 @@ BASE_SYMBOLS = tuple(s.strip().upper() for s in os.getenv("SYMBOLS", _DEFAULT_SY
 # SYMBOLS can be replaced at runtime by the symbol scanner; BASE_SYMBOLS never changes.
 SYMBOLS = BASE_SYMBOLS
 USE_SYMBOL_SCANNER = _bool("USE_SYMBOL_SCANNER", True)
-SYMBOL_SCAN_REFRESH_SECONDS = int(os.getenv("SYMBOL_SCAN_REFRESH_SECONDS", "43200"))
+SYMBOL_SCAN_REFRESH_SECONDS = _int("SYMBOL_SCAN_REFRESH_SECONDS", "43200")
 
 MARKET_SOURCES = ("spot", "futures")
 DIRECTION_SYMBOLS = ("BTCUSDT", "ETHUSDT")
@@ -50,29 +69,29 @@ TIMEFRAMES = ("15m", "1h", "4h")
 PRIMARY_TIMEFRAME = "1h"
 KLINE_LIMIT = 200
 MIN_CANDLES_REQUIRED = 60
-MIN_24H_VOLUME_USDT = float(os.getenv("MIN_24H_VOLUME_USDT", "5000000"))
-MAX_SYMBOLS_TO_SCAN = int(os.getenv("MAX_SYMBOLS_TO_SCAN", "50"))
+MIN_24H_VOLUME_USDT = _float("MIN_24H_VOLUME_USDT", "5000000")
+MAX_SYMBOLS_TO_SCAN = _int("MAX_SYMBOLS_TO_SCAN", "50")
 EXCLUDED_SYMBOLS = set()
 EXCLUDED_KEYWORDS = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
 
-SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))
-MAX_SCAN_DURATION_SECONDS = int(os.getenv("MAX_SCAN_DURATION_SECONDS", "150"))
+SCAN_INTERVAL_SECONDS = _int("SCAN_INTERVAL_SECONDS", "180")
+MAX_SCAN_DURATION_SECONDS = _int("MAX_SCAN_DURATION_SECONDS", "150")
 MAX_CONCURRENT_REQUESTS = 3
 MAX_OPEN_POSITIONS = 5
-CORRELATION_MAX = float(os.getenv("CORRELATION_MAX", "0.85"))
-PAIR_LOCK_AFTER_STOPLOSS_MIN = int(os.getenv("PAIR_LOCK_AFTER_STOPLOSS_MIN", "120"))
+CORRELATION_MAX = _float("CORRELATION_MAX", "0.85")
+PAIR_LOCK_AFTER_STOPLOSS_MIN = _int("PAIR_LOCK_AFTER_STOPLOSS_MIN", "120")
 USE_BTC_COMPASS = _bool("USE_BTC_COMPASS", True)
 USE_ROLLING_VWAP = _bool("USE_ROLLING_VWAP", True)
 STRICT_HTF_CONFIRM = _bool("STRICT_HTF_CONFIRM", False)
-MAX_SAME_SIDE = int(os.getenv("MAX_SAME_SIDE", "3"))
+MAX_SAME_SIDE = _int("MAX_SAME_SIDE", "3")
 
 MIN_SIGNAL_SCORE = 50
 SIGNAL_COOLDOWN_SECONDS = 3600
-POSITION_CHECK_SECONDS = int(os.getenv("POSITION_CHECK_SECONDS", "15"))
+POSITION_CHECK_SECONDS = _int("POSITION_CHECK_SECONDS", "15")
 
 # Entry is taken at the live price. If price moved more than this many ATR away
 # from the closed candle the setup is considered stale and skipped.
-ENTRY_MAX_DRIFT_ATR = float(os.getenv("ENTRY_MAX_DRIFT_ATR", "1.0"))
+ENTRY_MAX_DRIFT_ATR = _float("ENTRY_MAX_DRIFT_ATR", "1.0")
 
 TAKER_LONG_MIN = 0.45
 TAKER_SHORT_MAX = 0.55
@@ -81,7 +100,7 @@ FEAR_GREED_MIN_SHORT = 20
 BREADTH_MIN_LONG = 30.0
 BREADTH_MAX_SHORT = 70.0
 
-CONFLICT_MIN_SCORE_GAP = int(os.getenv("CONFLICT_MIN_SCORE_GAP", "15"))
+CONFLICT_MIN_SCORE_GAP = _int("CONFLICT_MIN_SCORE_GAP", "15")
 SOFT_FILTER_PENALTY = 10
 MAX_SOFT_FILTER_FAILS = 2
 HIGH_VOL_MIN_SCORE = 65
@@ -96,9 +115,9 @@ USE_ORDER_BOOK_FILTER = True
 USE_ML_FILTER = _bool("USE_ML_FILTER", True)
 ML_CONFIDENCE_THRESHOLD = 0.55
 ML_NEUTRAL_THRESHOLD = 0.45
-ML_HORIZON_CANDLES = int(os.getenv("ML_HORIZON_CANDLES", "4"))
-ML_MIN_ACCURACY = float(os.getenv("ML_MIN_ACCURACY", "0.52"))
-ML_RETRAIN_DAYS = int(os.getenv("ML_RETRAIN_DAYS", "7"))
+ML_HORIZON_CANDLES = _int("ML_HORIZON_CANDLES", "4")
+ML_MIN_ACCURACY = _float("ML_MIN_ACCURACY", "0.52")
+ML_RETRAIN_DAYS = _int("ML_RETRAIN_DAYS", "7")
 ML_TRAIN_SYMBOLS = tuple(s.strip().upper() for s in os.getenv(
     "ML_TRAIN_SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT").split(",") if s.strip())
 ML_MODEL_PATH = os.getenv("ML_MODEL_PATH", os.path.join(os.path.dirname(DB_PATH) or ".", "model.pkl"))
@@ -126,42 +145,42 @@ DRAWDOWN_PAUSE_SECONDS = 24 * 3600
 # A strategy with MAX_CONSECUTIVE_LOSSES losses in a row is paused for this long, then retried.
 STRATEGY_PAUSE_SECONDS = int(os.getenv("STRATEGY_PAUSE_SECONDS", str(6 * 3600)))
 # Kelly sizing needs a meaningful sample before it replaces the fixed risk per trade.
-BRAIN_MIN_TRADES = int(os.getenv("BRAIN_MIN_TRADES", "30"))
+BRAIN_MIN_TRADES = _int("BRAIN_MIN_TRADES", "30")
 
-BACKTEST_CANDLES = int(os.getenv("BACKTEST_CANDLES", "2000"))
+BACKTEST_CANDLES = _int("BACKTEST_CANDLES", "2000")
 BACKTEST_INTERVAL = "1h"
 DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 # --- Auto-Tune (tuned on the first part of the history, validated on the unseen last part) ---
-AUTOTUNE_MIN_TRADES = int(os.getenv("AUTOTUNE_MIN_TRADES", "8"))
-AUTOTUNE_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_MIN_PROFIT_FACTOR", "1.1"))
-AUTOTUNE_MAX_DRAWDOWN_PCT = float(os.getenv("AUTOTUNE_MAX_DRAWDOWN_PCT", "25"))
-AUTOTUNE_TEST_FRACTION = float(os.getenv("AUTOTUNE_TEST_FRACTION", "0.3"))
-AUTOTUNE_TEST_MIN_TRADES = int(os.getenv("AUTOTUNE_TEST_MIN_TRADES", "10"))
-AUTOTUNE_TEST_MIN_PROFIT_FACTOR = float(os.getenv("AUTOTUNE_TEST_MIN_PROFIT_FACTOR", "1.2"))
+AUTOTUNE_MIN_TRADES = _int("AUTOTUNE_MIN_TRADES", "8")
+AUTOTUNE_MIN_PROFIT_FACTOR = _float("AUTOTUNE_MIN_PROFIT_FACTOR", "1.1")
+AUTOTUNE_MAX_DRAWDOWN_PCT = _float("AUTOTUNE_MAX_DRAWDOWN_PCT", "25")
+AUTOTUNE_TEST_FRACTION = _float("AUTOTUNE_TEST_FRACTION", "0.3")
+AUTOTUNE_TEST_MIN_TRADES = _int("AUTOTUNE_TEST_MIN_TRADES", "10")
+AUTOTUNE_TEST_MIN_PROFIT_FACTOR = _float("AUTOTUNE_TEST_MIN_PROFIT_FACTOR", "1.2")
 
-INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "200"))
-RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "2.0"))
-MAX_PORTFOLIO_RISK_PCT = float(os.getenv("MAX_PORTFOLIO_RISK_PCT", "10.0"))
-MAX_ALLOCATION_PCT = float(os.getenv("MAX_ALLOCATION_PCT", "100.0"))
-DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "3.0"))
+INITIAL_BALANCE = _float("INITIAL_BALANCE", "200")
+RISK_PER_TRADE_PCT = _float("RISK_PER_TRADE_PCT", "2.0")
+MAX_PORTFOLIO_RISK_PCT = _float("MAX_PORTFOLIO_RISK_PCT", "10.0")
+MAX_ALLOCATION_PCT = _float("MAX_ALLOCATION_PCT", "100.0")
+DAILY_LOSS_LIMIT_PCT = _float("DAILY_LOSS_LIMIT_PCT", "3.0")
 
-MAX_DIRECTIONAL_HEAT_PCT = float(os.getenv("MAX_DIRECTIONAL_HEAT_PCT", "10.0"))
+MAX_DIRECTIONAL_HEAT_PCT = _float("MAX_DIRECTIONAL_HEAT_PCT", "10.0")
 # Kept for backward compatibility only. The aggregate cap is MAX_PORTFOLIO_RISK_PCT (hard ceiling 10%);
 # the old default of 20% silently allowed double the specified limit and is no longer honoured.
-MAX_TOTAL_HEAT_PCT = min(float(os.getenv("MAX_TOTAL_HEAT_PCT", "10.0")), MAX_PORTFOLIO_RISK_PCT)
+MAX_TOTAL_HEAT_PCT = min(_float("MAX_TOTAL_HEAT_PCT", "10.0"), MAX_PORTFOLIO_RISK_PCT)
 
 # --- Futures simulation (isolated margin). Leverage 1 = fully collateralised. ---
-FUTURES_LEVERAGE = float(os.getenv("FUTURES_LEVERAGE", "1"))
-MAINTENANCE_MARGIN_RATE = float(os.getenv("MAINTENANCE_MARGIN_RATE", "0.005"))
+FUTURES_LEVERAGE = _float("FUTURES_LEVERAGE", "1")
+MAINTENANCE_MARGIN_RATE = _float("MAINTENANCE_MARGIN_RATE", "0.005")
 FUNDING_ENABLED = _bool("FUNDING_ENABLED", True)
 REQUIRE_SYMBOL_RULES = _bool("REQUIRE_SYMBOL_RULES", True)   # refuse trades whose exchange rules are unknown
 
 # --- Data safety ---
-PRICE_MAX_AGE_SECONDS = float(os.getenv("PRICE_MAX_AGE_SECONDS", "30"))    # WebSocket price older than this is ignored
-DATA_STALE_SECONDS = float(os.getenv("DATA_STALE_SECONDS", "300"))         # no fresh prices this long -> block new entries
-SYMBOL_INFO_TTL_SECONDS = int(os.getenv("SYMBOL_INFO_TTL_SECONDS", "21600"))
-KLINE_CACHE_SECONDS = float(os.getenv("KLINE_CACHE_SECONDS", "20"))
+PRICE_MAX_AGE_SECONDS = _float("PRICE_MAX_AGE_SECONDS", "30")    # WebSocket price older than this is ignored
+DATA_STALE_SECONDS = _float("DATA_STALE_SECONDS", "300")         # no fresh prices this long -> block new entries
+SYMBOL_INFO_TTL_SECONDS = _int("SYMBOL_INFO_TTL_SECONDS", "21600")
+KLINE_CACHE_SECONDS = _float("KLINE_CACHE_SECONDS", "20")
 
 
 def _ws_url(url):
@@ -222,6 +241,20 @@ SCALE_OUT_R = 1.0
 SCALE_OUT_PCT = 0.5
 
 
+# Safe ranges for values an operator can set through environment variables. A typo such as SCAN_INTERVAL_SECONDS=0
+# would otherwise hammer Binance until the IP is banned, and INITIAL_BALANCE<=0 or DAILY_LOSS_LIMIT_PCT<=0 would
+# silently disable trading.
+_LIMITS = (
+    ("PORT", 1, 65535), ("SCAN_INTERVAL_SECONDS", 30, 86400), ("POSITION_CHECK_SECONDS", 5, 3600),
+    ("MAX_SCAN_DURATION_SECONDS", 10, 3600), ("SYMBOL_SCAN_REFRESH_SECONDS", 300, 604800),
+    ("KLINE_CACHE_SECONDS", 0, 600), ("MAX_SYMBOLS_TO_SCAN", 1, 300), ("MIN_24H_VOLUME_USDT", 0, 1e12),
+    ("INITIAL_BALANCE", 10, 1e9), ("DAILY_LOSS_LIMIT_PCT", 0.1, 100), ("ML_MIN_ACCURACY", 0.5, 0.99),
+    ("CORRELATION_MAX", 0.1, 1.0), ("PRICE_MAX_AGE_SECONDS", 1, 3600), ("DATA_STALE_SECONDS", 10, 86400),
+    ("ENTRY_MAX_DRIFT_ATR", 0, 20), ("BACKTEST_CANDLES", 300, 20000), ("ML_HORIZON_CANDLES", 1, 48),
+    ("ML_RETRAIN_DAYS", 1, 365), ("SYMBOL_INFO_TTL_SECONDS", 60, 604800), ("PAIR_LOCK_AFTER_STOPLOSS_MIN", 0, 10080),
+)
+
+
 def validate_config():
     if not PAPER_MODE:
         raise RuntimeError("This build is paper-simulation only.")
@@ -246,4 +279,8 @@ def validate_config():
         raise ValueError("Directional heat must be in (0, MAX_TOTAL_HEAT_PCT].")
     if not 0 < AUTOTUNE_TEST_FRACTION < 0.6:
         raise ValueError("AUTOTUNE_TEST_FRACTION must be in (0, 0.6).")
+    for name, low, high in _LIMITS:
+        value = globals()[name]
+        if not (low <= value <= high):          # also rejects NaN
+            raise ValueError("%s=%r is outside the safe range [%s, %s]" % (name, value, low, high))
     return True
