@@ -184,7 +184,11 @@
       [
         { label: Q.t("choose_photo"), kind: "pri", keep: true, fn: function () { Q.$("pf-file").click(); } },
         { label: Q.t("remove_photo"), keep: true, fn: function () { pending = ""; Q.$("pf-av").innerHTML = '<span class="av xl">' + Q.esc(Q.initials()) + "</span>"; } },
-        { label: Q.t("save"), kind: "pri", fn: function () { Q.saveProfile(Q.$("pf-name").value, pending); } }
+        { label: Q.t("save"), kind: "pri", keep: true, fn: function () {          // read the fields first: closing the sheet empties it
+          var name = Q.$("pf-name") ? Q.$("pf-name").value : Q.S.name;
+          Q.saveProfile(name, pending);
+          Q.closeSheet();
+        } }
       ], true);
     Q.$("pf-file").addEventListener("change", function (e) {
       var f = e.target.files && e.target.files[0];
@@ -236,13 +240,13 @@
     if (!Q.S.online) { cls = "bad"; label = Q.t("offline"); }
     else if (st) { cls = st.paused ? "off" : (st.running ? "on" : "bad"); label = st.paused ? Q.t("paused") : (st.running ? Q.t("running") : Q.t("offline")); }
     var comp = st && st.compass ? (st.compass.futures || st.compass.spot || "") : "", mk = "";
-    if (comp) mk = '<span class="sc ' + (comp === "BULLISH" ? "on" : comp === "BEARISH" ? "bad" : "") + '">' + Q.t("market_s") + " &middot; " + Q.t(comp.toLowerCase()) + "</span>";
+    if (comp) mk = '<span class="sc ' + (comp === "BULLISH" ? "on" : comp === "BEARISH" ? "bad" : "") + '">' + (comp === "BULLISH" ? "&#9650; " : comp === "BEARISH" ? "&#9660; " : "&#9670; ") + Q.t(comp.toLowerCase()) + "</span>";
     var feed = !Q.S.online ? '<span class="sc bad"><i class="dot"></i>' + Q.t("no_link") + "</span>"
       : (st && st.ws_connected ? '<span class="sc on"><i class="dot"></i>' + Q.t("feed_ws") + "</span>" : '<span class="sc off"><i class="dot"></i>' + Q.t("feed_rest") + "</span>");
     var upd = Q.S.t ? Math.max(0, Math.round((Date.now() - Q.S.t) / 1000)) : null;
     return '<span class="sc ' + cls + '"><i class="dot"></i>' + label + "</span>" + mk + feed +
       '<span class="sc num">' + (Q._busy ? '<i class="spin" style="width:10px;height:10px"></i>' : "&#8635;") + " " + (upd == null ? "-" : upd + Q.t("sec")) + "</span>" +
-      '<span class="sc paper">' + Q.t("paper") + "</span>";
+      '<span class="sc paper">' + Q.t("paper_s") + "</span>";
   };
   Q.drawTop = function () {
     var n = Q.alerts().filter(function (a) { return a.k !== "info"; }).length;
