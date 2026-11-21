@@ -18,6 +18,8 @@ _ASSETS = {
     "pro_overview.js": "application/javascript; charset=utf-8",
     "pro_trades.js": "application/javascript; charset=utf-8",
     "pro_signals.js": "application/javascript; charset=utf-8",
+    "pro_markets.js": "application/javascript; charset=utf-8",
+    "pro_more.js": "application/javascript; charset=utf-8",
     "pro_tools.js": "application/javascript; charset=utf-8",
 }
 
@@ -111,7 +113,7 @@ def _position(pos, price):
         "id": pos["id"], "symbol": pos["symbol"], "source": pos["source"], "side": pos["side"],
         "entry": entry, "price": price, "stop": _f(pos["stop_price"]), "target": _f(pos["target_price"]),
         "qty": qty, "margin": margin, "risk": _f(pos["risk_amount"]), "risk_initial": _f(pos.get("initial_risk")),
-        "pnl": pnl, "realized_partial": _f(pos.get("partial_pnl")), "funding": _f(pos.get("funding_paid")),
+        "initial_stop": first_stop, "pnl": pnl, "realized_partial": _f(pos.get("partial_pnl")), "funding": _f(pos.get("funding_paid")),
         "leverage": _f(pos.get("leverage"), 1.0), "liquidation": pos.get("liquidation_price"),
         "scaled_out": bool(pos.get("scale_out_done")),
         "pnl_pct": (pnl / margin * 100) if margin else 0.0,
@@ -215,6 +217,7 @@ async def pro_system(request: Request):
         "protection": {"blocked": bool(blocked), "reason": why}, "strategies": health,
         "symbols": len(config.SYMBOLS), "scan_every": config.SCAN_INTERVAL_SECONDS,
         "storage": db.storage_info(), "integrity": db.integrity_report(),
+        "telegram": bool(config.TELEGRAM_TOKEN and config.TELEGRAM_ADMIN_ID),   # configured only: no token is ever sent to the browser
         "risk": {"per_trade": config.RISK_PER_TRADE_PCT, "portfolio": config.MAX_PORTFOLIO_RISK_PCT,
                  "daily_limit": config.DAILY_LOSS_LIMIT_PCT, "max_drawdown": config.MAX_DRAWDOWN_PCT,
                  "max_positions": config.MAX_OPEN_POSITIONS},
