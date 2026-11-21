@@ -173,8 +173,8 @@
       "equity_curve": "Equity curve",
       "errors": "Errors",
       "exit": "Exit",
-      "feed_rest": "Feed · REST",
-      "feed_ws": "Feed · WS",
+      "feed_rest": "REST",
+      "feed_ws": "WS",
       "feed_ws_x": "Live WebSocket price stream is connected",
       "fees": "Fees",
       "funding": "Funding",
@@ -275,7 +275,8 @@
       "sg_model": "Model",
       "sg_alerts": "Alerts",
       "f_nodata": "No data",
-      "partial": "Partial profit"
+      "partial": "Partial profit",
+      "paper_s": "PAPER"
     },
     ar: {
       "nav_overview": "الرئيسية",
@@ -449,8 +450,8 @@
       "equity_curve": "منحنى الرصيد",
       "errors": "الأخطاء",
       "exit": "الخروج",
-      "feed_rest": "البيانات · REST",
-      "feed_ws": "البيانات · WS",
+      "feed_rest": "REST",
+      "feed_ws": "WS",
       "feed_ws_x": "بث الأسعار المباشر متصل",
       "fees": "الرسوم",
       "funding": "التمويل",
@@ -551,7 +552,8 @@
       "sg_model": "النموذج",
       "sg_alerts": "التنبيهات",
       "f_nodata": "بيانات ناقصة",
-      "partial": "ربح جزئي محقق"
+      "partial": "ربح جزئي محقق",
+      "paper_s": "افتراضي"
     }
   };
   (window.__mods = window.__mods || []).push("i18n");
