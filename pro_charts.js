@@ -220,8 +220,10 @@
       var R = 84 - i * 21, pct = Math.max(0, Math.min(100, Number(it.pct) || 0));
       var a = Math.PI * (1 - pct / 100), dx = cx + R * Math.cos(a), dy = cy - R * Math.sin(a);
       var lx = Math.max(14, Math.min(186, cx + (R + 15) * Math.cos(a))), ly = Math.max(10, cy - (R + 15) * Math.sin(a) + 3);
-      out += '<path class="tk" pathLength="100" stroke-width="13" d="M ' + (cx - R) + " " + cy + " A " + R + " " + R + " 0 0 1 " + (cx + R) + " " + cy + '"/>' +
-        '<path class="fg" pathLength="100" stroke="' + it.color + '" stroke-width="13" stroke-dasharray="' + pct.toFixed(2) + ' 100" d="M ' + (cx - R) + " " + cy + " A " + R + " " + R + " 0 0 1 " + (cx + R) + " " + cy + '"/>' +
+      var d = "M " + (cx - R) + " " + cy + " A " + R + " " + R + " 0 0 1 " + (cx + R) + " " + cy;
+      out += '<path class="tk" stroke-width="13" d="' + d + '"/>';
+      if (pct < 0.5) return;                                // an empty arc draws nothing (a zero dash with round caps paints a dot)
+      out += '<path class="fg" pathLength="100" stroke="' + it.color + '" stroke-width="13" stroke-dasharray="' + pct.toFixed(2) + ' 1000" d="' + d + '"/>' +   // gap > path: the pattern never repeats
         '<circle cx="' + dx.toFixed(1) + '" cy="' + dy.toFixed(1) + '" r="4.5" fill="#000" stroke="' + it.color + '" stroke-width="2.5"/>' +
         '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="middle">' + Math.round(pct) + "%</text>";
     });
