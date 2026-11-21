@@ -10,6 +10,7 @@ from telegram_bot import TelegramNotifier
 from dashboard import router
 from ui import router as ui_router
 import security
+from login_page import LOGIN_HTML
 
 # INFO إلى stdout (عادي)، والتحذيرات والأخطاء إلى stderr (تظهر حمراء في Railway)
 _out=logging.StreamHandler(sys.stdout); _out.addFilter(lambda r: r.levelno<logging.WARNING)
@@ -58,54 +59,7 @@ app.include_router(router)
 # --- شاشة تسجيل الدخول الفخمة ---
 @app.get("/login", response_class=HTMLResponse)
 async def login_page():
-    return """
-    <!doctype html>
-    <html lang="en" class="dark">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-      <title>AI QUANT X · LOGIN</title>
-      <script src="https://cdn.tailwindcss.com"></script>
-      <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-      <style>
-        body { font-family: 'Inter', sans-serif; background-color: #020308; background-image: radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.08) 0%, transparent 60%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .glass-card { background: rgba(10, 15, 30, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(0, 243, 255, 0.15); box-shadow: 0 4px 30px rgba(0,0,0,0.5); border-radius: 1.5rem; }
-        .neon-text { font-family: 'Orbitron', sans-serif; text-shadow: 0 0 15px #00f3ff; }
-        .liquid-input { background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.05); color: white; }
-        .liquid-input:focus { outline: none; border-color: #00f3ff; box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05), 0 0 10px rgba(0, 243, 255, 0.2); }
-        .liquid-btn { background: linear-gradient(145deg, rgba(0, 243, 255, 0.15), rgba(0, 100, 150, 0.2)); box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5), -2px -2px 8px rgba(0, 243, 255, 0.1), inset 0px 1px 2px rgba(0, 243, 255, 0.4); border: 1px solid rgba(0, 243, 255, 0.3); color: #00f3ff; text-shadow: 0 0 8px rgba(0, 243, 255, 0.8); transition: all 0.2s ease; }
-        .liquid-btn:active { box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.6), inset -2px -2px 6px rgba(255, 255, 255, 0.05); transform: scale(0.98); }
-      </style>
-    </head>
-    <body class="text-slate-200">
-      <div class="glass-card p-8 w-full max-w-sm mx-4 relative overflow-hidden">
-        <!-- Scanline effect -->
-        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00f3ff] to-transparent animate-[scan_3s_linear_infinite]"></div>
-        
-        <div class="text-center mb-8">
-          <h1 class="text-3xl font-black text-white tracking-widest neon-text">AI QUANT <span style="color:#b026ff; text-shadow: 0 0 15px #b026ff;">X</span></h1>
-          <p class="text-slate-400 text-xs uppercase tracking-widest mt-2 font-mono">System Authentication</p>
-        </div>
-        
-        <form action="/api/login" method="POST" class="space-y-6">
-          <div>
-            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-2">Access Key</label>
-            <input type="password" name="password" required placeholder="••••••••••••" 
-                   class="w-full liquid-input rounded-xl px-4 py-3 text-sm tracking-widest text-center transition-all">
-          </div>
-          
-          <button type="submit" class="w-full liquid-btn font-bold py-3 rounded-xl tracking-wider font-orbitron text-sm mt-4">
-            INITIALIZE
-          </button>
-        </form>
-        
-        <div class="mt-8 text-center border-t border-slate-800 pt-4">
-            <p class="text-[9px] text-slate-600 font-mono">PAPER TRADING SIMULATION</p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
+    return LOGIN_HTML
 
 # --- مسار معالجة تسجيل الدخول ---
 @app.post("/api/login")
@@ -147,15 +101,15 @@ async def dashboard_key_guard(request: Request, call_next):
     if key and path not in ("/health", "/login", "/api/login"):
         supplied=request.query_params.get("key") or ""
         token=request.cookies.get("dash_key") or ""
-        if security.is_locked(_client_ip(request)):
+        verdict=security.authorize(key, supplied, token, _client_ip(request))
+        if verdict=="locked":
             return JSONResponse({"detail":"too many attempts"},status_code=429)
-        if not security.check_credentials(key, supplied_key=supplied, supplied_token=token):
-            if supplied: security.register_failure(_client_ip(request))
+        if verdict!="ok":
             if path.startswith("/api/"):
                 return JSONResponse({"detail":"unauthorized"},status_code=401)
             return RedirectResponse(url="/login")
         response=await call_next(request)
-        if supplied:
+        if supplied and security.check_credentials(key, supplied_key=supplied):
             response.set_cookie("dash_key",security.session_token(key),httponly=True,samesite="lax",
                                 max_age=30*86400,secure=_is_https(request))
     else:
@@ -164,6 +118,8 @@ async def dashboard_key_guard(request: Request, call_next):
     response.headers["X-Content-Type-Options"]="nosniff"
     response.headers["X-Frame-Options"]="DENY"
     response.headers["Referrer-Policy"]="no-referrer"
+    for name,value in security.extra_headers(path, response.headers.get("content-type","")).items():
+        response.headers.setdefault(name,value)
     return response
 
 @app.get("/health")
