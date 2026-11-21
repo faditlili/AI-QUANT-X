@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import asyncio, re
 from backtest import run_backtest, run_walk_forward, format_report
 import config
+import security
 from optimizer import run_auto_tune
 
 router=APIRouter()
@@ -11,6 +12,8 @@ _bt_running=False
 
 @router.get("/legacy", response_class=HTMLResponse)
 async def dashboard():
+    if not config.ENABLE_LEGACY_DASHBOARD:      # loads unpinned third-party scripts (CDN) into the logged-in origin: opt-in
+        return HTMLResponse("Not found", status_code=404)
     return HTMLResponse("""<!doctype html>
 <html lang="en">
 <head>
@@ -871,6 +874,10 @@ async def market_klines(request: Request, symbol: str = "BTCUSDT", interval: str
     symbol = symbol.upper()
     if not _SYMBOL_RE.fullmatch(symbol) or interval not in _INTERVALS or source not in ("spot", "futures"):
         return JSONResponse({"error": "invalid symbol, interval or source"}, status_code=400)
+    # Every new symbol/interval costs one upstream Binance request: cap per client so a loop cannot get our IP banned.
+    ip = security.client_ip(request.headers.get("x-forwarded-for", ""), request.client.host if request.client else None, config.TRUSTED_PROXY)
+    if security.rate_limited("klines:" + str(ip), 120, 60.0):
+        return JSONResponse({"error": "too many requests"}, status_code=429)
     try:
         df = await _engine(request).market.get_klines(symbol, interval, 100, source)
         return [{"time": int(r.timestamp) // 1000, "open": float(r.open), "high": float(r.high), "low": float(r.low), "close": float(r.close)}
