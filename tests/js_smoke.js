@@ -24,6 +24,7 @@ class El {
   getContext() { return ctx2d; }
   click() { this.clicked = true; }
   get offsetWidth() { return 0; }
+  toDataURL() { return "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ"; }
 }
 const mk = (id, tag) => { const e = new El(tag || "div", id); registry.set(id, e); return e; };
 ["boot", "top", "sub", "view", "tabs", "sheet", "toast"].forEach((i) => mk(i));
@@ -36,7 +37,8 @@ Object.assign(globalThis, {
   localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
   location: { hash: "", href: "" }, history: { replaceState() {} }, scrollTo() {}, devicePixelRatio: 2,
   setInterval: () => { intervalCount++; return 1; }, clearInterval() {}, setTimeout: (fn) => 1, clearTimeout() {},
-  FileReader: class {}, Image: class {}
+  FileReader: class { readAsDataURL() { this.result = "data:image/png;base64,AAAA"; setImmediate(() => this.onload && this.onload()); } },
+  Image: class { set src(v) { this.width = 400; this.height = 300; setImmediate(() => this.onload && this.onload()); } }
 });
 
 /* ---------- mocked API ---------- */
@@ -140,6 +142,22 @@ const sleep = () => new Promise((x) => setImmediate(x));
     Q.saveProfile("<img src=x onerror=alert(1)>", ""); if (/<img src=x/.test(registry.get("top")._html)) fail("profile name was not escaped");
     Q.saveProfile("", ""); if (Q.S.name !== "Fedi Tl") fail("empty name should fall back to Fedi Tl");
     if (!/Fedi Tl/.test(registry.get("top")._html)) fail("greeting must contain the name Fedi Tl");
+    /* profile through the REAL sheet buttons (the Save button used to throw after the sheet emptied itself) */
+    const sheetBtns = () => registry.get("sh-act")._opts;
+    Q.profileSheet(); registry.get("pf-name").value = "Fedi Tl";
+    await registry.get("pf-file").l.change({ target: { files: [{ type: "image/png", size: 5000 }] } }); await sleep(); await sleep();
+    if (!/<img/.test(registry.get("pf-av")._html)) fail("photo preview not shown after choosing a file");
+    try { sheetBtns()[sheetBtns().length - 1].l.click(); } catch (e) { fail("Save button threw: " + e.message); }
+    if (!Q.S.avatar) fail("photo was not saved through the sheet Save button");
+    if (registry.get("sheet").className.includes("open")) fail("sheet should close after Save");
+    if (!/<img[^>]+src="data:image\/jpeg/.test(registry.get("top")._html)) fail("saved photo not shown in the header");
+    Q.profileSheet(); await registry.get("pf-file").l.change({ target: { files: [{ type: "text/plain", size: 10 }] } }); await sleep();
+    sheetBtns()[2].l.click(); if (!Q.S.avatar) fail("a non-image file must not remove the saved photo");
+    Q.profileSheet(); sheetBtns()[1].l.click(); sheetBtns()[2].l.click(); if (Q.S.avatar) fail("Remove photo + Save should clear the photo");
+    /* gauge: empty arcs draw nothing; dash pattern must not repeat (it painted stray dots at both ends) */
+    const svg = Q.charts.arcs([{ pct: 0, color: "#d6ff1f" }, { pct: 0, color: "#ff6b6b" }, { pct: 100, color: "#999999" }], "x");
+    if ((svg.match(/class="fg"/g) || []).length !== 1 || (svg.match(/<circle/g) || []).length !== 1) fail("empty gauge arcs must not render foreground/dot");
+    if (/stroke-dasharray="[\d.]+ 100"/.test(svg)) fail("gauge dash gap must exceed the path length");
     /* language switch */
     Q.setLang("ar"); await sleep(); if (!/أهلاً/.test(registry.get("top")._html)) fail("Arabic greeting missing"); Q.setLang("en"); await sleep();
     /* alerts derive from real state */
