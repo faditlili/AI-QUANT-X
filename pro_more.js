@@ -1,129 +1,149 @@
 "use strict";
 (function () {
   var Q = window.Q, C = Q.charts, COL = C.COL, V = Q.views;
-  var FEATURED = ["BTC", "ETH", "BNB", "SOL", "XRP"];
-  var SORTS = [["volume", "s_volume"], ["gain", "s_gainers"], ["loss", "s_losers"], ["name", "s_name"]];
+  var RANGES = { "6h": 21600, "1d": 86400, "7d": 604800, all: 0 };
+  function kv(k, v, cls) { return "<div><span>" + k + '</span><b class="num ' + (cls || "") + '">' + v + "</b></div>"; }
+  function tile(label, value, cls, sub) { return '<div class="tile"><div class="lbl">' + label + '</div><div class="v num ' + (cls || "") + '">' + value + "</div>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; }
+  function hl(dot, title, sub, val, cls) { return '<div class="hl"><i class="st ' + dot + '"></i><div class="m"><b>' + title + "</b><small>" + sub + '</small></div><b class="num ' + (cls || "") + '">' + val + "</b></div>"; }
 
-  function ema(vals, n) {
-    var k = 2 / (n + 1), e = vals[0], i;
-    for (i = 1; i < vals.length; i++) e = vals[i] * k + e * (1 - k);
-    return e;
-  }
-  function analyse(rows) {                                    // 1H trend + volatility from real candles
-    if (!rows || rows.length < 30) return null;
-    var closes = rows.map(function (r) { return r.close; }), last = rows.slice(-14), atr = 0;
-    last.forEach(function (r) { atr += (r.high - r.low) / (r.close || 1) * 100; });
-    var f = ema(closes, 9), s = ema(closes, 21);
-    return { sp: closes.slice(-48), trend: f > s * 1.001 ? "up" : f < s * 0.999 ? "down" : "side", atr: atr / last.length };
-  }
-  function wanted() {
-    var set = FEATURED.slice();
-    ((Q.S.ov && Q.S.ov.positions) || []).forEach(function (p) { var s = p.symbol.replace("USDT", ""); if (set.indexOf(s) < 0) set.push(s); });
-    return set;
-  }
-  function sorted(list) {
-    var by = Q.S.ms, l = list.slice();
-    l.sort(function (a, b) {
-      if (by === "gain") return b.change - a.change;
-      if (by === "loss") return a.change - b.change;
-      if (by === "name") return a.symbol < b.symbol ? -1 : 1;
-      return (b.volume || 0) - (a.volume || 0);
-    });
-    var fi = FEATURED.map(function (s) { return l.filter(function (x) { return x.symbol === s; })[0]; }).filter(Boolean);
-    return fi.concat(l.filter(function (x) { return FEATURED.indexOf(x.symbol) < 0; }));
-  }
+  /* ---------- More: hub ---------- */
+  V.more = {
+    mount: function (root) {
+      root.innerHTML = '<div id="mo-top" class="card"></div><div id="mo-list"></div>';
+    },
+    update: function () {
+      var ov = Q.S.ov, sys = Q.S.sys, a = Q.alerts().filter(function (x) { return x.k !== "info"; }).length;
+      Q.paint("mo-top", '<div style="display:flex;align-items:center;gap:14px">' + Q.avatar("xl") + '<div style="min-width:0"><div class="lbl">' + Q.t("welcome") + '</div><div style="font-size:22px;font-weight:700;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + Q.esc(Q.S.name) +
+        '</div><span class="tag paper" style="margin-top:6px">' + Q.t("paper") + '</span> <span class="mu num" style="font-size:12px">' + (sys ? "v" + Q.esc(sys.version) : "") + "</span></div></div>");
+      var items = [["history", "history", Q.t("sub_history"), Q.t("d_history")], ["analytics", "analytics", Q.t("sub_analytics"), Q.t("d_analytics")], ["health", "health", Q.t("sub_health"), a ? a + " " + Q.t("alerts_n") : Q.t("d_health")],
+                   ["tools", "tools", Q.t("sub_tools"), Q.t("d_tools")], ["settings", "gear", Q.t("sub_settings"), Q.t("d_settings")]];
+      Q.paint("mo-list", items.map(function (x) {
+        return '<button class="hub" data-go="' + x[0] + '"><span class="ico">' + Q.icon(x[1]) + '</span><span class="m"><b>' + x[2] + "</b><small>" + x[3] + '</small></span><span class="go" style="width:38px;height:38px;background:var(--card2)">' + Q.icon("arrow") + "</span></button>";
+      }).join(""));
+    }
+  };
 
-  V.markets = {
+  /* ---------- Analytics ---------- */
+  V.analytics = {
     mount: function (root) {
       root.innerHTML =
-        '<div class="sec"><div id="mk-h1"></div><div id="mk-sum" class="card"></div></div>' +
-        '<div class="sec"><div id="mk-h2"></div><div class="card"><div id="mk-tf"></div><div class="cvwrap tall"><canvas id="cv-mk" class="cv" role="img" aria-label="Price chart"></canvas></div></div></div>' +
-        '<div class="seg" id="mk-seg"></div>' +
-        '<div class="field"><input id="mk-q" type="search" autocomplete="off" aria-label="' + Q.esc(Q.t("search")) + '" placeholder="' + Q.esc(Q.t("search")) + '" value="' + Q.esc(Q.S.mq) + '"></div>' +
-        '<div class="card" id="mk-list"></div>';
+        '<div class="sec"><div id="an-h1"></div><div class="card"><div id="an-eqt"></div><div class="cvwrap"><canvas id="cv-an-eq" class="cv" role="img" aria-label="Equity curve"></canvas></div><div id="an-rng" style="margin-top:12px"></div></div></div>' +
+        '<div id="an-kpi" class="grid4"></div>' +
+        '<div class="sec"><div id="an-h2"></div><div class="card"><div id="an-dr" style="margin-bottom:6px"></div><div id="an-bw" class="cvwrap" style="display:none"><canvas id="cv-an-d" class="cv" role="img" aria-label="Daily performance"></canvas></div><div id="an-be"></div></div></div>' +
+        '<div class="sec"><div id="an-h3"></div><div class="card"><div id="an-aw" class="cvwrap short" style="display:none"><canvas id="cv-an-a" class="cv" role="img" aria-label="Trading activity"></canvas></div><div id="an-ae"></div></div></div>' +
+        '<div class="sec"><div id="an-h4"></div><div id="an-str" class="card"></div></div><div id="an-note" class="mu" style="font-size:11.5px;text-align:center;margin:4px 0 12px"></div>';
       root.onclick = function (e) {
         var b = e.target.closest ? e.target.closest("[data-act]") : null;
         if (!b) return;
         var a = b.getAttribute("data-act"), v = b.getAttribute("data-v");
-        if (a === "mtf") { Q.S.tf = v; Q._last.kl = 0; V.markets.reload(); }
-        if (a === "msort") { Q.S.ms = v; V.markets.update(); }
-        if (a === "mrow") {
-          var k = "mk:" + v, was = !!Q.S.open[k];
-          Q.S.open[k] = !was;
-          if (!was) { Q.S.sym = v + "USDT"; Q._last.kl = 0; V.markets.reload(); } else V.markets.paintList();
-        }
+        if (a === "eqr") { Q.S.eqr = v; V.analytics.update(); }
+        if (a === "adr") { Q.S.ad = Number(v); V.analytics.update(); }
       };
-      root.oninput = function (e) { if (e.target && e.target.id === "mk-q") { Q.S.mq = e.target.value || ""; V.markets.paintList(); } };
-    },
-    reload: async function () { await V.markets.loadChart(); V.markets.update(); },
-    loadChart: async function () {
-      try { Q.S.kl = await Q.api("/api/market_klines?symbol=" + encodeURIComponent(Q.S.sym) + "&interval=" + Q.S.tf); }
-      catch (e) { Q.S.kl = []; }
     },
     load: async function () {
-      await Q.every("tk", 20000, async function () {
-        try { Q.S.tk = await Q.api("/api/live_tickers"); Q.S.tkErr = ""; } catch (e) { Q.S.tkErr = String(e.message || e); }
-      });
-      await Q.every("kl", 15000, V.markets.loadChart);
-      await Q.every("mkl", 60000, async function () {
-        var syms = wanted(), res = {};
-        await Promise.all(syms.map(async function (s) {
-          try { res[s] = analyse(await Q.api("/api/market_klines?symbol=" + encodeURIComponent(s + "USDT") + "&interval=1h")); } catch (e) { res[s] = null; }
-        }));
-        Q.S.mkl = res;
-      });
+      await Q.every("eq", 30000, async function () { Q.S.eq = await Q.api("/api/pro/equity"); });
+      await Q.every("hist", 20000, async function () { Q.S.hist = await Q.api("/api/pro/history"); });
     },
     update: function () {
-      var ov = Q.S.ov, tk = Q.S.tk || [];
-      var st = (ov && ov.status) || {}, comp = st.compass || {}, br = ov ? ov.breadth : null;
-      var up = tk.filter(function (x) { return x.change > 0; }).length;
-      Q.paint("mk-h1", Q.head("scan", Q.t("market_intel"), null));
-      Q.paint("mk-sum",
-        '<div class="chips">' + ["spot", "futures"].map(function (s) {
-          var c = comp[s] || "", k = c === "BULLISH" ? "up" : c === "BEARISH" ? "down" : "flat";
-          return '<span class="chip ' + k + '">' + s + " &middot; " + (c ? Q.t(c.toLowerCase()) : Q.t("na")) + "</span>";
-        }).join("") + "</div>" +
-        '<div class="kv"><div><span>' + Q.t("regime") + "</span><b>" + (comp.futures ? Q.t(comp.futures.toLowerCase()) : Q.t("na")) + "</b></div>" +
-        "<div><span>" + Q.t("breadth") + '</span><b class="num">' + (br == null ? Q.t("na") : Q.n(br, 0) + "%") + "</b></div>" +
-        "<div><span>" + Q.t("rising_24h") + '</span><b class="num">' + (tk.length ? up + " / " + tk.length : Q.t("na")) + "</b></div>" +
-        "<div><span>" + Q.t("symbols") + '</span><b class="num">' + (tk.length || Q.t("na")) + "</b></div></div>");
+      var ov = Q.S.ov;
+      if (!ov) { Q.paint("an-h1", Q.wait()); return; }
+      var perf = ov.perf, p = ov.portfolio, base = ov.initial || 0, h = Q.S.hist || [], n = Q.S.ad || 14;
+      var all = Q.S.eq || [], sec = RANGES[Q.S.eqr], pts = all;
+      if (sec && all.length) { var from = all[all.length - 1].t - sec; pts = all.filter(function (x) { return x.t >= from; }); if (pts.length < 2) pts = all.slice(-2); }
+      var peak = 0, maxdd = 0, i;
+      for (i = 0; i < all.length; i++) { peak = Math.max(peak, all[i].v); if (peak) maxdd = Math.max(maxdd, ((peak - all[i].v) / peak) * 100); }
+      Q.paint("an-h1", Q.head("chart", Q.t("equity_curve"), null));
+      Q.paint("an-eqt", '<div class="big num" style="font-size:30px">$' + Q.n(p.equity) + '</div><div class="chg num ' + Q.cls(p.equity - base) + '">' + Q.sg(p.equity - base) + " (" + Q.sg(base ? (p.equity - base) / base * 100 : 0) + "%)</div>");
+      Q.paint("an-rng", '<div class="chips">' + ["6h", "1d", "7d", "all"].map(function (k) { return '<button class="chip' + (Q.S.eqr === k ? " on" : "") + '" data-act="eqr" data-v="' + k + '">' + Q.t("r" + k) + "</button>"; }).join("") + "</div>");
+      C.area(Q.$("cv-an-eq"), pts, { base: base, empty: Q.t("no_data") });
 
-      Q.paint("mk-h2", Q.head("chart", Q.S.sym.replace("USDT", "") + " \u00b7 " + Q.S.tf, null));
-      Q.paint("mk-tf", '<div class="chips" style="margin-bottom:6px">' + ["15m", "1h", "4h"].map(function (k) {
-        return '<button class="chip' + (Q.S.tf === k ? " on" : "") + '" data-act="mtf" data-v="' + k + '">' + k + "</button>";
-      }).join("") + "</div>");
-      var lines = [];
-      ((ov && ov.positions) || []).forEach(function (x) {
-        if (x.symbol !== Q.S.sym) return;
-        lines.push({ price: x.entry, color: "#bdbdbd", label: Q.t("entry") }, { price: x.stop, color: COL.dn, label: Q.t("stop") }, { price: x.target, color: COL.lime, label: Q.t("target") });
-      });
-      C.candles(Q.$("cv-mk"), Q.S.kl, lines, { empty: Q.t("no_data") });
+      var pf = perf.profit_factor, aw = perf.wins ? perf.gross_profit / perf.wins : 0, al = perf.losses ? perf.gross_loss / perf.losses : 0;
+      Q.paint("an-kpi",
+        tile(Q.t("win_rate"), perf.total_trades ? perf.win_rate.toFixed(1) + "%" : "-", perf.total_trades ? "up" : "mu", "W " + perf.wins + " / L " + perf.losses) +
+        tile(Q.t("profit_factor"), pf == null ? "INF" : Q.n(pf), pf == null || pf >= 1 ? "up" : "down", "GP " + Q.n(perf.gross_profit, 1) + " / GL " + Q.n(perf.gross_loss, 1)) +
+        tile(Q.t("max_dd"), maxdd.toFixed(2) + "%", maxdd > 10 ? "down" : maxdd > 5 ? "wa" : "up", all.length ? all.length + " " + Q.t("snapshots") : Q.t("na")) +
+        tile(Q.t("expectancy"), Q.sg(perf.total_trades ? perf.net_pnl / perf.total_trades : 0), Q.cls(perf.net_pnl), Q.t("avg_r") + " " + Q.sg(perf.avg_r, 2) + "R") +
+        tile(Q.t("avg_win"), Q.n(aw), "up", "") + tile(Q.t("avg_loss"), "-" + Q.n(al), "down", Q.t("payoff") + " " + (al ? Q.n(aw / al) : "-")) +
+        tile(Q.t("fees"), "-" + Q.n(perf.total_fees), "", "") + tile(Q.t("funding"), Q.sg(-perf.total_funding), "", ""));
 
-      Q.paint("mk-seg", SORTS.map(function (s) {
-        return '<button class="' + (Q.S.ms === s[0] ? "on" : "") + '" data-act="msort" data-v="' + s[0] + '">' + Q.t(s[1]) + "</button>";
-      }).join(""));
-      V.markets.paintList();
-    },
-    paintList: function () {
-      var tk = Q.S.tk || [], q = Q.S.mq.trim().toUpperCase(), kl = Q.S.mkl || {};
-      if (!tk.length) {
-        Q.paint("mk-list", Q.S.tkErr ? '<div class="err">' + Q.esc(Q.t("err_load") + ": " + Q.S.tkErr) + '</div><button class="btn pri blk" data-act="retry">' + Q.t("retry") + "</button>"
-                                     : '<div class="sk" style="margin:12px 0"></div><div class="sk" style="margin:18px 0;width:80%"></div><div class="sk" style="margin:18px 0;width:60%"></div>');
-        return;
-      }
-      var rows = sorted(tk).filter(function (x) { return !q || x.symbol.indexOf(q) >= 0; });
-      Q.paint("mk-list", rows.length ? rows.slice(0, 80).map(function (x) {
-        var a = kl[x.symbol], k = "mk:" + x.symbol, open = !!Q.S.open[k], sym = Q.esc(x.symbol);
-        var trend = a ? (a.trend === "up" ? Q.t("uptrend") : a.trend === "down" ? Q.t("downtrend") : Q.t("sideways")) : Q.t("na");
-        return '<div class="mx-w"><button class="mr" data-act="mrow" data-v="' + sym + '" aria-expanded="' + open + '"><span class="coin">' + sym.slice(0, 4) + '</span><span class="m"><b>' + sym +
-          "</b><small>" + (x.volume ? "$" + Q.compact(x.volume) + " " + Q.t("vol") : Q.t("na")) + '</small></span><span class="sp">' +
-          (a ? C.spark(a.sp, x.change >= 0 ? COL.lime : COL.dn, 100, 30) : "") + '</span><span class="e num"><b>$' + Q.price(x.price) + '</b><span class="' + Q.cls(x.change) + '">' + Q.sg(x.change) + "%</span></span></button>" +
-          (open ? '<div class="mx"><div class="kv"><div><span>' + Q.t("trend_1h") + "</span><b class=\"" + (a ? (a.trend === "up" ? "up" : a.trend === "down" ? "down" : "flat") : "mu") + '">' + trend + "</b></div>" +
-            "<div><span>" + Q.t("volatility") + '</span><b class="num">' + (a ? a.atr.toFixed(2) + "%" : Q.t("na")) + "</b></div>" +
-            "<div><span>" + Q.t("change_24h") + '</span><b class="num ' + Q.cls(x.change) + '">' + Q.sg(x.change) + "%</b></div>" +
-            "<div><span>" + Q.t("volume_24h") + '</span><b class="num">' + (x.volume ? "$" + Q.compact(x.volume) : Q.t("na")) + "</b></div></div></div>" : "") + "</div>";
-      }).join("") : Q.empty("search", Q.t("no_match")));
+      var days = Q.dailyPnl(n), any = days.some(function (d) { return d.has; });
+      Q.paint("an-h2", Q.head("analytics", Q.t("daily_perf"), null));
+      Q.paint("an-dr", '<div class="chips">' + [7, 14, 30].map(function (k) { return '<button class="chip' + (n === k ? " on" : "") + '" data-act="adr" data-v="' + k + '">' + k + Q.t("d") + "</button>"; }).join("") + "</div>");
+      Q.$("an-bw").style.display = any ? "block" : "none";
+      Q.paint("an-be", any ? "" : (Q.S.hist == null ? '<div class="sk" style="width:60%"></div>' : Q.empty("analytics", Q.t("no_trades"))));
+      if (any) C.bars(Q.$("cv-an-d"), days.map(function (d, k) { return { v: d.v, label: n > 14 ? (k % 3 === 0 ? d.label : "") : d.label }; }), { fmt: function (v) { return Q.sg(v, Math.abs(v) >= 100 ? 0 : 2); }, empty: Q.t("no_data") });
+
+      var act = Q.dailyPnl(n).map(function (d) { return { v: 0, label: d.label, day: d.day }; }), cnt = {};
+      h.forEach(function (t) { if (t.closed) { var k = Math.floor(t.closed / 86400); cnt[k] = (cnt[k] || 0) + 1; } });
+      act.forEach(function (d, k) { d.v = cnt[d.day] || 0; if (n > 14 && k % 3) d.label = ""; });
+      var anyA = act.some(function (d) { return d.v > 0; });
+      Q.paint("an-h3", Q.head("scan", Q.t("activity"), null));
+      Q.$("an-aw").style.display = anyA ? "block" : "none";
+      Q.paint("an-ae", anyA ? "" : (Q.S.hist == null ? "" : Q.empty("scan", Q.t("no_trades"))));
+      if (anyA) C.bars(Q.$("cv-an-a"), act, { fmt: function (v) { return String(Math.round(v)); }, empty: Q.t("no_data") });
+
+      var by = {}, mx = 0, k;
+      h.forEach(function (t) { var s = by[t.strategy] = by[t.strategy] || { n: 0, w: 0, net: 0, r: 0 }; s.n++; s.net += t.pnl; s.r += t.r; if (t.pnl > 0) s.w++; });
+      for (k in by) mx = Math.max(mx, Math.abs(by[k].net));
+      Q.paint("an-h4", Q.head("positions", Q.t("strat_perf"), null));
+      Q.paint("an-str", Object.keys(by).length ? Object.keys(by).sort(function (a, b) { return by[b].net - by[a].net; }).map(function (s) {
+        var x = by[s];
+        return '<div class="meter"><div class="row"><b>' + Q.esc(s) + '</b><span class="num ' + Q.cls(x.net) + '">' + Q.sg(x.net) + "</span></div>" + C.bar(mx ? Math.abs(x.net) / mx * 100 : 0, x.net >= 0 ? COL.lime : COL.dn) +
+          '<div class="mu num" style="font-size:11.5px;margin-top:5px">' + x.n + " " + Q.t("trades") + " &middot; " + Q.t("win_rate") + " " + (x.w / x.n * 100).toFixed(0) + "% &middot; " + Q.t("avg_r") + " " + Q.sg(x.r / x.n, 2) + "R</div></div>";
+      }).join("") : Q.empty("positions", Q.t("no_trades")));
+      Q.paint("an-note", h.length ? Q.t("based_on") + " " + h.length + " " + Q.t("recent_trades") : "");
     }
   };
-  (window.__mods = window.__mods || []).push("markets");
+
+  /* ---------- System health ---------- */
+  V.health = {
+    mount: function (root) { root.innerHTML = '<div id="hl-body"></div>'; },
+    load: async function () { await Q.every("sys", 15000, async function () { Q.S.sys = await Q.api("/api/pro/system"); }); },
+    update: function () {
+      var ov = Q.S.ov, sys = Q.S.sys;
+      if (!ov) { Q.paint("hl-body", Q.wait()); return; }
+      var st = ov.status || {}, ml = (sys && sys.ml) || {}, sto = sys && sys.storage, ig = sys && sys.integrity;
+      var igOk = ig ? Math.abs(ig.cash_minus_ledger) < 0.01 && Math.abs(ig.cash_margin_identity) < 0.01 && Math.abs(ig.realized_minus_trades) < 0.01 : null;
+      var healthy = sys ? Object.keys(sys.strategies || {}).filter(function (k) { return sys.strategies[k]; }).length : 0, total = sys ? Object.keys(sys.strategies || {}).length : 0;
+      var rows = [
+        hl(!Q.S.online ? "bad" : st.paused ? "off" : st.running ? "on" : "bad", Q.t("engine"), Q.esc(Q.t("last_scan") + ": " + (st.last_scan ? Q.dur(ov.now - st.last_scan) + " " + Q.t("ago") : "-") + (sys ? " \u00b7 " + Q.t("scan_every") + " " + sys.scan_every + Q.t("sec") : "")), !Q.S.online ? Q.t("offline") : st.paused ? Q.t("paused") : st.running ? Q.t("running") : Q.t("offline")),
+        hl(!Q.S.online ? "bad" : st.data_ok === false ? "bad" : "on", Q.t("market_data"), Q.esc(st.data_ok === false ? (st.data_reason || "") : Q.t("data_ok_x")), !Q.S.online ? Q.t("no_link") : st.data_ok === false ? Q.t("al_data") : Q.t("ok"), st.data_ok === false || !Q.S.online ? "down" : "up"),
+        hl(st.ws_connected ? "on" : "off", Q.t("price_feed"), Q.esc(st.ws_connected ? Q.t("feed_ws_x") : Q.t("al_ws_x")), st.ws_connected ? "WebSocket" : "REST", st.ws_connected ? "up" : "wa"),
+        hl(!sto ? "" : sto.persistent ? "on" : "off", Q.t("database"), Q.esc(!sto ? Q.t("loading") : sto.persistent ? Q.t("db_ok_x") : Q.t("al_storage_x")), !sto ? "..." : sto.persistent ? Q.t("persistent") : Q.t("temporary"), !sto ? "mu" : sto.persistent ? "up" : "wa"),
+        hl(igOk == null ? "" : igOk ? "on" : "bad", Q.t("ledger"), Q.esc(ig ? "\u0394 " + Q.n(ig.cash_minus_ledger, 4) + " / " + Q.n(ig.cash_margin_identity, 4) + " / " + Q.n(ig.realized_minus_trades, 4) : Q.t("loading")), igOk == null ? "..." : igOk ? Q.t("reconciled") : Q.t("mismatch"), igOk == null ? "mu" : igOk ? "up" : "down"),
+        hl(!sys ? "" : ml.present && ml.valid ? "on" : "off", Q.t("ai_sub"), Q.esc(!sys ? Q.t("loading") : !ml.present ? Q.t("ml_none") : ml.valid ? Q.t("ml_on") : Q.t("ml_off")), sys ? healthy + "/" + total + " " + Q.t("strategies") : "...", "mu"),
+        hl(!sys || sys.telegram == null ? "" : sys.telegram ? "on" : "off", "Telegram", Q.esc(!sys || sys.telegram == null ? Q.t("na") : sys.telegram ? Q.t("tg_on_x") : Q.t("tg_off_x")), !sys || sys.telegram == null ? Q.t("na") : sys.telegram ? Q.t("configured") : Q.t("not_configured"), "mu"),
+        hl(sys && sys.protection && sys.protection.blocked ? "bad" : "on", Q.t("protection"), Q.esc(sys && sys.protection && sys.protection.blocked ? sys.protection.reason : Q.t("ok")), sys && sys.protection && sys.protection.blocked ? Q.t("blocked") : Q.t("ok"), sys && sys.protection && sys.protection.blocked ? "down" : "up"),
+        hl(st.last_error ? "off" : "on", Q.t("errors"), Q.esc(st.last_error ? String(st.last_error) : Q.t("no_errors")), st.last_error ? "!" : "0", st.last_error ? "wa" : "up")
+      ];
+      Q.paint("hl-body", '<div class="sec">' + Q.head("health", Q.t("sub_health"), null) + '<div class="card">' + rows.join("") + "</div></div>" +
+        '<div class="sec">' + Q.head("shield", Q.t("mode"), null) + '<div class="card"><div class="h"><span class="tag paper">' + Q.t("paper") + '</span></div><div class="mu" style="font-size:12.5px">' + Q.esc(Q.t("paper_x")) + "</div>" +
+        '<div class="kv">' + kv(Q.t("version"), sys ? Q.esc(sys.version) : "-") + kv(Q.t("mode"), Q.esc(st.mode || "PAPER")) + "</div></div></div>");
+    }
+  };
+
+  /* ---------- Settings & profile ---------- */
+  V.settings = {
+    mount: function (root) {
+      root.innerHTML = '<div id="se-body"></div>';
+      root.onclick = function (e) {
+        var b = e.target.closest ? e.target.closest("[data-act]") : null;
+        if (!b) return;
+        var a = b.getAttribute("data-act");
+        if (a === "lang-set") Q.setLang(b.getAttribute("data-v"));
+      };
+    },
+    update: function () {
+      var ov = Q.S.ov, sys = Q.S.sys, st = (ov && ov.status) || {}, rk = (sys && sys.risk) || null;
+      Q.paint("se-body",
+        '<div class="sec">' + Q.head("user", Q.t("profile"), null) + '<div class="card" style="text-align:center"><div>' + Q.avatar("xl") + '</div><div style="font-size:22px;font-weight:700;margin:10px 0 2px">' + Q.esc(Q.S.name) + '</div><div class="mu" style="font-size:12px">' + Q.esc(Q.t("photo_note")) +
+        '</div><button class="btn pri blk" data-act="profile">' + Q.icon("camera") + Q.t("edit_profile") + "</button></div></div>" +
+        '<div class="sec">' + Q.head("lang", Q.t("language"), null) + '<div class="card"><div class="chips"><button class="chip' + (Q.S.lang === "ar" ? " on" : "") + '" data-act="lang-set" data-v="ar">العربية</button><button class="chip' + (Q.S.lang === "en" ? " on" : "") + '" data-act="lang-set" data-v="en">English</button></div></div></div>' +
+        '<div class="sec">' + Q.head("cpu", Q.t("engine"), null) + '<div class="card"><div class="h"><span class="sc ' + (st.paused ? "off" : "on") + '"><i class="dot"></i>' + (st.paused ? Q.t("paused") : Q.t("running")) + '</span></div><div class="mu" style="font-size:12.5px">' + Q.esc(Q.t("pause_x")) +
+        '</div><button class="btn blk" data-act="pause">' + Q.icon(st.paused ? "play" : "pause") + (st.paused ? Q.t("resume") : Q.t("pause")) + "</button></div></div>" +
+        '<div class="sec">' + Q.head("shield", Q.t("risk_cfg"), "tools") + '<div class="card">' + (rk ? '<div class="kv" style="margin-top:0">' + kv(Q.t("per_trade"), rk.per_trade + "%") + kv(Q.t("portfolio"), rk.portfolio + "%") + kv(Q.t("daily_limit"), rk.daily_limit + "%") + kv(Q.t("max_dd"), rk.max_drawdown + "%") + kv(Q.t("max_pos"), rk.max_positions) + "</div>" : '<div class="sk"></div>') +
+        '<div class="mu" style="font-size:11.5px;margin-top:10px">' + Q.esc(Q.t("risk_ro")) + "</div></div></div>");
+    }
+  };
+  (window.__mods = window.__mods || []).push("more");
 })();
