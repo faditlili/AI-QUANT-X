@@ -82,15 +82,15 @@
 
       Q.paint("ov-h1", Q.head("chart", Q.t("portfolio_perf"), "analytics"));
       Q.paint("ov-hero",
-        '<div class="row2"><div class="lbl">' + Q.t("equity") + '</div><span class="tag paper">' + Q.t("paper") + "</span></div>" +
-        '<div class="big num">$' + Q.n(eq) + '</div><div class="chg num ' + Q.cls(chg) + '">' + (chg >= 0 ? "&#9650; " : "&#9660; ") + Q.sg(chg) + " (" + Q.sg(chgPct) + '%) <span class="mu">' + Q.t("since_start") + "</span></div>");
+        '<div class="row2"><div class="lbl">' + Q.t("equity") + '</div>' + Q.ecg() + '<span class="tag paper">' + Q.t("paper") + "</span></div>" +
+        '<div class="big num ' + (chg >= 0 ? "glow-up" : "glow-down") + '">' + Q.cnt(eq, { pre: "$", key: "eq", intro: true }) + '</div><div class="chg num ' + Q.cls(chg) + '">' + (chg >= 0 ? "&#9650; " : "&#9660; ") + Q.cnt(chg, { sign: true, key: "chg" }) + " (" + Q.cnt(chgPct, { sign: true, suf: "%", key: "chgp" }) + ') <span class="mu">' + Q.t("since_start") + "</span></div>");
       Q.paint("ov-rng", '<div class="chips">' + ["6h", "1d", "7d", "all"].map(function (k) {
         return '<button class="chip' + (Q.S.eqr === k ? " on" : "") + '" data-act="eqr" data-v="' + k + '">' + Q.t("r" + k) + "</button>";
       }).join("") + "</div>");
       C.area(Q.$("cv-eq"), V.overview.eqPoints(), { base: base, empty: Q.t("no_data") });
       Q.paint("ov-sub",
-        '<div class="kv"><div><span>' + Q.t("today") + '</span><b class="num ' + Q.cls(r.daily_change) + '">' + Q.sg(r.daily_change) + " (" + Q.sg(dayPct) + '%)</b></div>' +
-        "<div><span>" + Q.t("total") + '</span><b class="num ' + Q.cls(chg) + '">' + Q.sg(chg) + " (" + Q.sg(chgPct) + "%)</b></div></div>");
+        '<div class="kv"><div><span>' + Q.t("today") + '</span><b class="num ' + Q.cls(r.daily_change) + '">' + Q.cnt(r.daily_change, { sign: true, key: "day" }) + " (" + Q.cnt(dayPct, { sign: true, suf: "%", key: "dayp" }) + ')</b></div>' +
+        "<div><span>" + Q.t("total") + '</span><b class="num ' + Q.cls(chg) + '">' + Q.cnt(chg, { sign: true, key: "tot" }) + " (" + Q.cnt(chgPct, { sign: true, suf: "%", key: "totp" }) + ")</b></div></div>");
 
       /* daily P&L bars */
       var days = Q.dailyPnl(7), any = days.some(function (d) { return d.has; });
@@ -112,10 +112,10 @@
         "</div>");
 
       Q.paint("ov-kpi",
-        tile(Q.t("available"), "$" + Q.n(p.cash_balance), "", Q.t("virtual")) +
-        tile(Q.t("unrealized"), Q.sg(p.unrealized_pnl), Q.cls(p.unrealized_pnl), "$" + Q.n(p.open_margin) + " " + Q.t("in_trades")) +
-        tile(Q.t("realized"), Q.sg(p.realized_pnl), Q.cls(p.realized_pnl), perf.total_trades + " " + Q.t("trades")) +
-        tile(Q.t("today"), Q.sg(r.daily_change), Q.cls(r.daily_change), Q.sg(dayPct) + "%"));
+        tile(Q.t("available"), Q.cnt(p.cash_balance, { pre: "$", key: "cash" }), "", Q.t("virtual")) +
+        tile(Q.t("unrealized"), Q.cnt(p.unrealized_pnl, { sign: true, key: "unr" }), Q.cls(p.unrealized_pnl), "$" + Q.n(p.open_margin) + " " + Q.t("in_trades")) +
+        tile(Q.t("realized"), Q.cnt(p.realized_pnl, { sign: true, key: "rea" }), Q.cls(p.realized_pnl), perf.total_trades + " " + Q.t("trades")) +
+        tile(Q.t("today"), Q.cnt(r.daily_change, { sign: true, key: "day2" }), Q.cls(r.daily_change), Q.sg(dayPct) + "%"));
 
       /* risk controls */
       var lim = r.daily_loss_limit || 0, used = lim && r.daily_change < 0 ? (-r.daily_change / lim) * 100 : 0;
