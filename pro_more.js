@@ -53,7 +53,7 @@
       var peak = 0, maxdd = 0, i;
       for (i = 0; i < all.length; i++) { peak = Math.max(peak, all[i].v); if (peak) maxdd = Math.max(maxdd, ((peak - all[i].v) / peak) * 100); }
       Q.paint("an-h1", Q.head("chart", Q.t("equity_curve"), null));
-      Q.paint("an-eqt", '<div class="big num" style="font-size:30px">$' + Q.n(p.equity) + '</div><div class="chg num ' + Q.cls(p.equity - base) + '">' + Q.sg(p.equity - base) + " (" + Q.sg(base ? (p.equity - base) / base * 100 : 0) + "%)</div>");
+      Q.paint("an-eqt", '<div class="big num" style="font-size:30px">' + Q.cnt(p.equity, { pre: "$", key: "aeq" }) + '</div><div class="chg num ' + Q.cls(p.equity - base) + '">' + Q.sg(p.equity - base) + " (" + Q.sg(base ? (p.equity - base) / base * 100 : 0) + "%)</div>");
       Q.paint("an-rng", '<div class="chips">' + ["6h", "1d", "7d", "all"].map(function (k) { return '<button class="chip' + (Q.S.eqr === k ? " on" : "") + '" data-act="eqr" data-v="' + k + '">' + Q.t("r" + k) + "</button>"; }).join("") + "</div>");
       C.area(Q.$("cv-an-eq"), pts, { base: base, empty: Q.t("no_data") });
 
