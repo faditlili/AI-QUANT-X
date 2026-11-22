@@ -35,14 +35,14 @@
       list.forEach(function (p) { tot += p.pnl; risk += p.risk; margin += p.margin; });
       Q.paint("po-h", Q.head("positions", Q.t("open_positions"), null));
       Q.paint("po-sum",
-        '<div class="grid2"><div><div class="lbl">' + Q.t("open_pnl") + '</div><div class="big num ' + Q.cls(tot) + '" style="font-size:28px">' + Q.sg(tot) + "</div></div><div><div class=\"lbl\">" + Q.t("open_count") + '</div><div class="big num" style="font-size:28px">' + list.length + "</div></div></div>" +
+        '<div class="grid2"><div><div class="lbl">' + Q.t("open_pnl") + '</div><div class="big num ' + Q.cls(tot) + '" style="font-size:28px">' + Q.cnt(tot, { sign: true, key: "opnl" }) + "</div></div><div><div class=\"lbl\">" + Q.t("open_count") + '</div><div class="big num" style="font-size:28px">' + list.length + "</div></div></div>" +
         '<div class="kv">' + kv(Q.t("risk_exposure"), "$" + Q.n(risk) + (eq ? " (" + Q.n(risk / eq * 100, 1) + "%)" : "")) + kv(Q.t("in_trades"), "$" + Q.n(margin)) + "</div>");
       Q.paint("po-list", list.length ? list.map(function (p) {
         var sym = Q.esc(p.symbol.replace("USDT", "")), open = !!Q.S.open["pos:" + p.id], id = Q.esc(p.id);
         return '<div class="card pt' + (open ? " open" : "") + '"><button class="pt-top" data-act="ptx" data-id="' + id + '" aria-expanded="' + open + '"><div class="pos-h"><b>' + sym + '</b><span class="tag ' + p.side.toLowerCase() + '">' + Q.t(p.side.toLowerCase()) +
-          '</span><span class="tag src">' + Q.esc(p.source) + '</span><span style="flex:1"></span><span class="mu num">' + Q.dur((ov.now || 0) - p.opened) + '</span><span class="chev">' + Q.icon("chev") + '</span></div><div class="pos-pnl num ' + Q.cls(p.pnl) + '">' + Q.sg(p.pnl) +
+          '</span><span class="tag src">' + Q.esc(p.source) + '</span><span style="flex:1"></span><span class="mu num">' + Q.dur((ov.now || 0) - p.opened) + '</span><span class="chev">' + Q.icon("chev") + '</span></div><div class="pos-pnl num ' + Q.cls(p.pnl) + '">' + Q.cnt(p.pnl, { sign: true, key: "pp" + p.id }) +
           " <small>" + Q.sg(p.pnl_pct, 1) + "% &middot; " + Q.sg(p.r, 2) + "R</small></div></button>" + rbar(p) +
-          '<div class="kv">' + kv(Q.t("entry"), Q.price(p.entry)) + kv(Q.t("now"), Q.price(p.price), Q.cls(p.pnl)) + kv(Q.t("stop"), Q.price(p.stop), "down") + kv(Q.t("target"), Q.price(p.target), "up") +
+          '<div class="kv">' + kv(Q.t("entry"), Q.price(p.entry)) + kv(Q.t("now"), Q.cnt(p.price, { dec: Q.priceDec(p.price), key: "pn" + p.id, flash: false }), Q.cls(p.pnl)) + kv(Q.t("stop"), Q.price(p.stop), "down") + kv(Q.t("target"), Q.price(p.target), "up") +
           kv(Q.t("size"), "$" + Q.n(p.margin)) + kv(Q.t("risk"), "$" + Q.n(p.risk) + (eq ? " (" + Q.n(p.risk / eq * 100, 2) + "%)" : "")) + "</div>" +
           '<div class="more"><div class="kv">' + kv(Q.t("qty"), Q.n(p.qty, 4)) + kv(Q.t("leverage"), Q.n(p.leverage, 1) + "x") + kv(Q.t("strategy"), Q.esc(p.strategy || "-")) + kv(Q.t("score"), p.score == null ? "-" : Q.n(p.score, 0)) +
           kv(Q.t("regime"), Q.esc(p.regime || "-")) + kv(Q.t("funding"), Q.sg(-p.funding)) + kv(Q.t("partial"), p.scaled_out ? Q.sg(p.realized_partial) : "-") + kv(Q.t("liq"), p.liquidation ? Q.price(p.liquidation) : "-") + "</div></div>" +
