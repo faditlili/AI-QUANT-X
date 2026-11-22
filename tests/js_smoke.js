@@ -20,6 +20,8 @@ class El {
   get options() { return this._isSel ? [{}, ...this._opts] : this._opts; }
   appendChild(c) { this._opts.push(c); }
   addEventListener(t, fn) { (this.l = this.l || {})[t] = fn; }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return this.attrs[k] === undefined ? null : this.attrs[k]; }
   getBoundingClientRect() { return { width: 300, height: 190, left: 0, top: 0 }; }
   getContext() { return ctx2d; }
   click() { this.clicked = true; }
@@ -27,7 +29,7 @@ class El {
   toDataURL() { return "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ"; }
 }
 const mk = (id, tag) => { const e = new El(tag || "div", id); registry.set(id, e); return e; };
-["boot", "top", "sub", "view", "tabs", "sheet", "toast"].forEach((i) => mk(i));
+["boot", "top", "sub", "view", "tabs", "sheet", "toast", "pulse"].forEach((i) => mk(i));
 const docL = {}; let docListenerCount = 0, intervalCount = 0;
 const store = new Map();
 Object.assign(globalThis, {
@@ -163,6 +165,65 @@ const sleep = () => new Promise((x) => setImmediate(x));
     /* alerts derive from real state */
     Q.S.ov.status.paused = true; Q.S.ov.status.data_ok = false; Q.S.ov.status.data_reason = "stale"; const al = Q.alerts().map((a) => a.t).join("|"); if (!/paused/i.test(al) || !/data/i.test(al)) fail("alerts missing for paused/data problem: " + al);
   } catch (e) { fail("interaction threw: " + (e && e.stack || e)); }
+
+  /* ---------- life: live numbers, heartbeat, events, chart motion ---------- */
+  try {
+    Q._rm = false; Q.S.lang = "en"; DATA = FULL; DOWN = false;
+    const html = Q.cnt(1234.5, { pre: "$", key: "t1" });
+    if (!/data-count="1234.5"/.test(html) || !html.includes(">$1,234.50<")) fail("cnt markup/final text wrong: " + html);
+    if (Q.cnt(5, { sign: true }) !== "+5.00") fail("cnt without key must be plain text, got " + Q.cnt(5, { sign: true }));
+    if (Q.cnt(NaN, { key: "x" }) !== "-" || Q.cnt(undefined, { key: "x" }) !== "-") fail("cnt must show '-' for missing numbers");
+    if (Q.cnt(1, { key: 'a"><img' }).includes("<img")) fail("cnt key must be escaped");
+    // enhance: no flash on first sight, flash up/down on change, nothing when unchanged, final text kept without rAF
+    const mkNode = (v, k, extra) => { const cls = new Set(); return { attrs: Object.assign({ "data-count": String(v), "data-k": k, "data-dec": "2" }, extra || {}), getAttribute(n) { return this.attrs[n] === undefined ? null : this.attrs[n]; }, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c) }, textContent: "final" }; };
+    const box = (nodes) => ({ querySelectorAll: () => nodes });
+    delete Q._cnt.life1;
+    let n1 = mkNode(100, "life1"); Q.enhance(box([n1])); if (n1.classList.has("tick-up") || n1.classList.has("tick-down")) fail("first sight must not flash");
+    let n2 = mkNode(110, "life1"); Q.enhance(box([n2])); if (!n2.classList.has("tick-up")) fail("increase must flash up");
+    let n3 = mkNode(90, "life1"); Q.enhance(box([n3])); if (!n3.classList.has("tick-down")) fail("decrease must flash down");
+    let n4 = mkNode(90, "life1"); Q.enhance(box([n4])); if (n4.classList.has("tick-up") || n4.classList.has("tick-down")) fail("unchanged value must not flash");
+    if (n3.textContent !== "final") fail("without requestAnimationFrame the final text must stay");
+    Q._rm = true; let n5 = mkNode(500, "life1"); Q.enhance(box([n5])); if (n5.classList.has("tick-up")) fail("reduced motion must disable flashing"); Q._rm = false;
+    // tween with a manual requestAnimationFrame: ends exactly on the target value
+    let frames = []; globalThis.requestAnimationFrame = (f) => { frames.push(f); return frames.length; };
+    delete Q._cnt.life2; Q.enhance(box([mkNode(0, "life2")])); let n6 = mkNode(250, "life2", { "data-pre": "$" }); Q.enhance(box([n6]));
+    if (!/^\$0\.00$/.test(n6.textContent)) fail("tween must start from the old value, got " + n6.textContent);
+    for (let t = 0, g = 0; frames.length && g < 200; g++) { const f = frames.shift(); f(t += 100); }
+    if (n6.textContent !== "$250.00") fail("tween must end on the target, got " + n6.textContent);
+    // chart reveal: starts at 0, ends at 1; instant when reduced motion or no rAF
+    frames = []; const cvA = new El("canvas", "cv-life"); Q.charts.area(cvA, Array.from({ length: 10 }, (_, i) => ({ t: i, v: i })), {});
+    if (cvA._p !== 0) fail("area chart should start its reveal at 0, got " + cvA._p);
+    for (let t = 0, g = 0; frames.length && g < 200; g++) { const f = frames.shift(); f(t += 100); }
+    if (cvA._p !== 1) fail("area chart reveal must finish at 1, got " + cvA._p);
+    Q._rm = true; frames = []; const cvB = new El("canvas", "cv-life2"); Q.charts.bars(cvB, [{ v: 1, label: "a" }, { v: -2, label: "b" }], {});
+    if (cvB._p !== 1 || frames.length) fail("reduced motion must draw charts instantly"); Q._rm = false;
+    delete globalThis.requestAnimationFrame;
+    const cvC = new El("canvas", "cv-life3"); Q.charts.candles(cvC, candles(30), [], {}); if (cvC._p !== 1) fail("without rAF candles draw instantly");
+    // Q.paint must hand freshly painted markup to the number animator
+    const host = registry.get("pulse"); delete Q._cnt.painted; let seen = 0;
+    host.querySelectorAll = () => { seen++; return [mkNode(seen === 1 ? 10 : 20, "painted")]; };
+    host._h = null; Q.paint("pulse", "<i>a</i>"); Q.paint("pulse", "<i>b</i>"); Q.paint("pulse", "<i>b</i>");
+    if (seen !== 2) fail("Q.paint must call enhance exactly when the markup changed (calls: " + seen + ")"); delete host.querySelectorAll;
+    // heartbeat bar follows the real state
+    const pulse = registry.get("pulse"); Q.S.online = true; Q.S.ov = JSON.parse(JSON.stringify(FULL["/api/pro/overview"]));
+    Q.tick(); if (pulse.getAttribute("data-s") !== "on") fail("pulse should be 'on' while running, got " + pulse.getAttribute("data-s"));
+    Q.S.ov.status.paused = true; Q.tick(); if (pulse.getAttribute("data-s") !== "paused") fail("pulse should be 'paused'");
+    Q.S.online = false; Q.tick(); if (pulse.getAttribute("data-s") !== "bad") fail("pulse should be 'bad' when offline");
+    if (!/class="ecg bad"/.test(Q.ecg())) fail("ecg must go flat when offline");
+    Q.S.online = true; Q.S.ov.status.paused = true; if (!/class="ecg off"/.test(Q.ecg())) fail("ecg must slow down while paused");
+    Q.S.ov.status.paused = false;
+    if (!/class="ecg "/.test(Q.ecg())) fail("ecg must beat while running");
+    if (!/Good (morning|afternoon|evening|night)/.test(Q.greeting())) fail("greeting missing");
+    // event watcher: silent on first look, toasts for opened/closed positions
+    Q._w = null; Q.S.ov = JSON.parse(JSON.stringify(FULL["/api/pro/overview"])); registry.get("toast").textContent = "";
+    Q.watch(); if (registry.get("toast").textContent) fail("first look must be silent");
+    const base = JSON.parse(JSON.stringify(Q.S.ov.positions[0])); Q.S.ov.positions.push(Object.assign({}, base, { id: "p9", symbol: "ETHUSDT", entry: 3000 }));
+    Q.watch(); if (!/ETH.*3,000/.test(registry.get("toast").textContent)) fail("opening a position must toast, got: " + registry.get("toast").textContent);
+    DATA = JSON.parse(JSON.stringify(FULL)); DATA["/api/pro/history"].unshift({ id: "p9", symbol: "ETHUSDT", source: "futures", side: "LONG", entry: 3000, exit: 3050, pnl: 7.5, gross: 8, fees: 0.5, funding: 0, r: 0.6, reason: "TAKE_PROFIT", opened: now - 100, closed: now - 5, strategy: "trend" });
+    Q.S.ov.positions = Q.S.ov.positions.filter((p) => p.id !== "p9"); registry.get("toast").textContent = "";
+    Q.watch(); await sleep(); await sleep(); if (!/ETH \+7\.50 · TAKE_PROFIT/.test(registry.get("toast").textContent)) fail("closing a position must toast the result, got: " + registry.get("toast").textContent);
+    DATA = FULL; Q._w = null;
+  } catch (e) { fail("life checks threw: " + (e && e.stack || e)); }
   /* server down: error state with retry, no exception */
   DOWN = true; Q._last = {}; Q.S.ov = null; Q.S.online = true;
   for (const v of VIEWS) { try { await Q.go(v); await Q.refresh(); } catch (e) { fail("view " + v + " threw while server down: " + e); } if (v !== "tools" && v !== "settings" && v !== "more" && !/data-act="retry"/.test(registry.get("view")._html + [...all].map((e) => e._html).join(""))) notes.push("no retry button seen for " + v + " while offline"); }
