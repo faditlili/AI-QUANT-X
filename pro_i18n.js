@@ -276,7 +276,11 @@
       "sg_alerts": "Alerts",
       "f_nodata": "No data",
       "partial": "Partial profit",
-      "paper_s": "PAPER"
+      "paper_s": "PAPER",
+      "g_morning": "Good morning",
+      "g_afternoon": "Good afternoon",
+      "g_evening": "Good evening",
+      "g_night": "Good night"
     },
     ar: {
       "nav_overview": "الرئيسية",
@@ -553,7 +557,11 @@
       "sg_alerts": "التنبيهات",
       "f_nodata": "بيانات ناقصة",
       "partial": "ربح جزئي محقق",
-      "paper_s": "افتراضي"
+      "paper_s": "افتراضي",
+      "g_morning": "صباح الخير",
+      "g_afternoon": "طاب نهارك",
+      "g_evening": "مساء الخير",
+      "g_night": "ليلة سعيدة"
     }
   };
   (window.__mods = window.__mods || []).push("i18n");
