@@ -117,7 +117,7 @@
         var trend = a ? (a.trend === "up" ? Q.t("uptrend") : a.trend === "down" ? Q.t("downtrend") : Q.t("sideways")) : Q.t("na");
         return '<div class="mx-w"><button class="mr" data-act="mrow" data-v="' + sym + '" aria-expanded="' + open + '"><span class="coin">' + sym.slice(0, 4) + '</span><span class="m"><b>' + sym +
           "</b><small>" + (x.volume ? "$" + Q.compact(x.volume) + " " + Q.t("vol") : Q.t("na")) + '</small></span><span class="sp">' +
-          (a ? C.spark(a.sp, x.change >= 0 ? COL.lime : COL.dn, 100, 30) : "") + '</span><span class="e num"><b>$' + Q.price(x.price) + '</b><span class="' + Q.cls(x.change) + '">' + Q.sg(x.change) + "%</span></span></button>" +
+          (a ? C.spark(a.sp, x.change >= 0 ? COL.lime : COL.dn, 100, 30) : "") + '</span><span class="e num"><b>' + Q.cnt(x.price, { pre: "$", dec: Q.priceDec(x.price), key: "mk" + x.symbol, flash: false }) + '</b><span class="' + Q.cls(x.change) + '">' + Q.sg(x.change) + "%</span></span></button>" +
           (open ? '<div class="mx"><div class="kv"><div><span>' + Q.t("trend_1h") + "</span><b class=\"" + (a ? (a.trend === "up" ? "up" : a.trend === "down" ? "down" : "flat") : "mu") + '">' + trend + "</b></div>" +
             "<div><span>" + Q.t("volatility") + '</span><b class="num">' + (a ? a.atr.toFixed(2) + "%" : Q.t("na")) + "</b></div>" +
             "<div><span>" + Q.t("change_24h") + '</span><b class="num ' + Q.cls(x.change) + '">' + Q.sg(x.change) + "%</b></div>" +
