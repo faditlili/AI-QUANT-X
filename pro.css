@@ -7,7 +7,10 @@ button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
 svg{display:block}
-.num{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+.num{unicode-bidi:plaintext;font-variant-numeric:tabular-nums}
+/* bidi: pure numbers ("-8.75", "$1,234.50") have no strong character so they stay left-to-right; a sentence that mixes Arabic words and
+   numbers follows its own direction. Forcing direction:ltr here used to turn "-8.75" into "8.75-" and mirror the parentheses. */
+small,.tile .v,.chg{unicode-bidi:plaintext}
 .up{color:var(--up)}.down{color:var(--dn)}.flat{color:var(--mu)}.mu{color:var(--mu)}.wa{color:var(--wa)}
 #boot{display:none;margin:12px;padding:12px 14px;border-radius:18px;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.4);font-size:13px}
 /* header */
