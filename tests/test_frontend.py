@@ -70,6 +70,13 @@ class StaticChecks(unittest.TestCase):
         self.assertIn("minmax(0,1fr)", css)
         self.assertIn("viewport-fit=cover", read(os.path.join(ROOT, "pro.html")))
 
+    def test_numbers_do_not_force_ltr_on_arabic_text(self):
+        css = read(os.path.join(ROOT, "pro.css"))
+        rule = re.search(r"(?m)^\.num\{([^}]*)\}", css).group(1)
+        self.assertIn("unicode-bidi:plaintext", rule)
+        self.assertNotIn("direction:ltr", rule, "a forced LTR isolate garbles 'Arabic word -8.75' (shows 8.75-)")
+        self.assertRegex(css, r"small,\.tile \.v,\.chg\{unicode-bidi:plaintext\}")
+
     def test_touch_targets_are_at_least_44px(self):
         css = read(os.path.join(ROOT, "pro.css"))
         for selector in (r"\.ib", r"\.go", r"\.back \.go", r"\.qb", r"\.btn", r"\.tab"):
