@@ -50,7 +50,7 @@
   Q.paint = function (id, html) {
     var el = Q.$(id);
     if (!el) return;
-    if (el._h !== html) { el.innerHTML = html; el._h = html; }
+    if (el._h !== html) { el.innerHTML = html; el._h = html; if (Q.enhance) Q.enhance(el); }
   };
   Q.every = async function (key, ms, fn) {
     var now = Date.now();
@@ -73,6 +73,94 @@
     el.className = "show" + (kind === "err" ? " err" : "");
     clearTimeout(Q._tt);
     Q._tt = setTimeout(function () { el.className = ""; }, 2600);
+  };
+
+  /* ---------- life: live numbers, haptics, heartbeat, event watcher (progressive: the final text is always in the markup) ---------- */
+  Q.reduce = function () {
+    if (Q._rm == null) { try { Q._rm = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { Q._rm = false; } }
+    return Q._rm;
+  };
+  Q.haptic = function (pattern) {
+    try { if (!Q.reduce() && typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+  };
+  Q.priceDec = function (v) { var a = Math.abs(Number(v)); return a >= 1000 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8; };
+  Q._cnt = {};
+  /* A number that animates when it changes: Q.cnt(value, {dec, sign, pre, suf, key, intro, flash}).  `key` identifies the
+     figure across repaints; `intro` counts up from 0 the first time; `flash:false` only flashes (no tween), for prices. */
+  Q.cnt = function (value, o) {
+    o = o || {};
+    var v = Number(value), dec = o.dec == null ? 2 : o.dec, pre = o.pre || "", suf = o.suf || "";
+    var text = isFinite(v) ? pre + (o.sign ? Q.sg(v, dec) : Q.n(v, dec)) + suf : "-";
+    if (!isFinite(v) || !o.key) return text;
+    return '<span data-count="' + v + '" data-dec="' + dec + '" data-k="' + Q.esc(o.key) + '"' + (o.sign ? ' data-sign="1"' : "") +
+      (pre ? ' data-pre="' + Q.esc(pre) + '"' : "") + (suf ? ' data-suf="' + Q.esc(suf) + '"' : "") + (o.intro ? ' data-intro="1"' : "") +
+      (o.flash === false ? ' data-tween="0"' : "") + ">" + Q.esc(text) + "</span>";
+  };
+  function fmtCnt(v, dec, sign, pre, suf) {
+    var m = Math.pow(10, dec);
+    if (Math.round(v * m) === 0) v = 0;                      // never show "-0.00" mid-animation
+    return pre + (sign ? Q.sg(v, dec) : Q.n(v, dec)) + suf;
+  }
+  Q.enhance = function (el) {
+    if (!el || !el.querySelectorAll || Q.reduce()) return;
+    var nodes = el.querySelectorAll("[data-count]"), i;
+    for (i = 0; i < nodes.length; i++) {
+      var n = nodes[i], key = n.getAttribute("data-k"), to = Number(n.getAttribute("data-count"));
+      if (!key || !isFinite(to)) continue;
+      var prev = Q._cnt[key], from = prev == null ? (n.getAttribute("data-intro") ? 0 : to) : prev;
+      Q._cnt[key] = to;
+      if (from === to) continue;
+      var dec = Number(n.getAttribute("data-dec")) || 0, sign = !!n.getAttribute("data-sign"), pre = n.getAttribute("data-pre") || "", suf = n.getAttribute("data-suf") || "";
+      if (prev != null && n.classList) {                      // a real change (not the first sight): flash green / red
+        n.classList.add(to > from ? "tick-up" : "tick-down");
+        (function (node) { setTimeout(function () { if (node.classList) { node.classList.remove("tick-up"); node.classList.remove("tick-down"); } }, 1000); })(n);
+      }
+      if (n.getAttribute("data-tween") === "0" || typeof requestAnimationFrame !== "function") continue;
+      (function (node, a, b) {
+        var t0 = null;
+        node.textContent = fmtCnt(a, dec, sign, pre, suf);    // start from the old value immediately: no one-frame flash of the new one
+        function step(ts) {
+          if (t0 == null) t0 = ts;
+          var x = Math.min(1, (ts - t0) / 650), e = 1 - Math.pow(1 - x, 3);
+          node.textContent = fmtCnt(x >= 1 ? b : a + (b - a) * e, dec, sign, pre, suf);
+          if (x < 1 && node.isConnected !== false) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      })(n, from, to);
+    }
+  };
+  Q.greeting = function () {
+    var h = new Date().getHours();
+    return Q.t(h >= 5 && h < 12 ? "g_morning" : h >= 12 && h < 17 ? "g_afternoon" : h >= 17 && h < 22 ? "g_evening" : "g_night");
+  };
+  Q.ecg = function () {                                        // heartbeat line: beats = running, slow = paused, flat = offline
+    var st = Q.S.ov && Q.S.ov.status, cls = !Q.S.online ? "bad" : st && st.paused ? "off" : st && st.running ? "" : "bad";
+    return '<svg class="ecg ' + cls + '" viewBox="0 0 84 26" aria-hidden="true"><path d="M0 14H20L24 14L29 4L35 23L40 8L44 14H84"/></svg>';
+  };
+  Q.watch = function () {                                      // toast + haptic when a position opens or closes (first look is silent)
+    var ov = Q.S.ov;
+    if (!ov) return;
+    var cur = {};
+    (ov.positions || []).forEach(function (p) { cur[p.id] = p; });
+    if (!Q._w) { Q._w = { pos: cur }; return; }
+    var before = Q._w.pos, opened = [], closed = [];
+    Object.keys(cur).forEach(function (id) { if (!before[id]) opened.push(cur[id]); });
+    Object.keys(before).forEach(function (id) { if (!cur[id]) closed.push(before[id]); });
+    Q._w.pos = cur;
+    opened.forEach(function (p) { Q.toast("\u25B2 " + p.symbol.replace("USDT", "") + " " + Q.t(String(p.side).toLowerCase()) + " @ " + Q.price(p.entry)); Q.haptic(18); });
+    if (closed.length) Q.reportClosed(closed);
+  };
+  Q.reportClosed = async function (closed) {
+    try {
+      var hist = await Q.api("/api/pro/history");
+      Q.S.hist = hist;
+      closed.forEach(function (p) {
+        var t = hist.filter(function (x) { return String(x.id) === String(p.id); })[0];
+        if (!t) return;
+        Q.toast((t.pnl >= 0 ? "\u2714 " : "\u2716 ") + t.symbol.replace("USDT", "") + " " + Q.sg(t.pnl) + " \u00b7 " + t.reason, t.pnl >= 0 ? "" : "err");
+        Q.haptic(t.pnl < 0 ? [20, 40, 20] : 24);
+      });
+    } catch (e) {}
   };
 
   /* ---------- icons ---------- */
@@ -251,14 +339,21 @@
   Q.drawTop = function () {
     var n = Q.alerts().filter(function (a) { return a.k !== "info"; }).length;
     Q.paint("top",
-      '<div class="hrow"><div class="hi"><small>' + Q.t("welcome") + "</small><b>" + Q.t("hi") + " " + Q.esc(Q.S.name) + "</b></div>" +
+      '<div class="hrow"><div class="hi"><small>' + Q.greeting() + "</small><b>" + Q.t("hi") + " " + Q.esc(Q.S.name) + "</b></div>" +
       '<button class="ib" data-act="bell" aria-label="' + Q.esc(Q.t("notifications")) + '">' + Q.icon("bell") + (n ? '<i class="bdg"></i>' : "") + "</button>" +
       '<button class="ib" data-act="settings" aria-label="' + Q.esc(Q.t("settings")) + '">' + Q.icon("gear") + "</button>" +
       '<button class="av" data-act="profile" aria-label="' + Q.esc(Q.t("profile")) + '">' + (Q.S.avatar && AVATAR_RE.test(Q.S.avatar) ? '<img alt="" src="' + Q.S.avatar + '">' : Q.esc(Q.initials())) + "</button></div>" +
       '<div id="strip"></div>');
     Q.tick();
   };
-  Q.tick = function () { Q.paint("strip", Q.strip()); };
+  Q.tick = function () {
+    Q.paint("strip", Q.strip());
+    var pl = Q.$("pulse");                                   // top-edge heartbeat follows the real engine state
+    if (pl && pl.setAttribute) {
+      var st = Q.S.ov && Q.S.ov.status, s = !Q.S.online ? "bad" : st && st.paused ? "paused" : st && st.running ? "on" : "bad";
+      if (pl.getAttribute("data-s") !== s) pl.setAttribute("data-s", s);
+    }
+  };
   Q.drawSub = function () {
     Q.paint("sub", SUBS[Q.S.tab]
       ? '<div class="back"><button class="go" data-act="back" aria-label="' + Q.esc(Q.t("back")) + '">' + Q.icon("back") + "</button><b>" + Q.esc(Q.t("sub_" + Q.S.tab)) + "</b></div>" : "");
@@ -281,7 +376,7 @@
     if (Q._busy) return;
     Q._busy = true;
     try {
-      try { Q.S.ov = await Q.api("/api/pro/overview"); Q.S.online = true; Q.S.err = ""; Q.S.t = Date.now(); }
+      try { Q.S.ov = await Q.api("/api/pro/overview"); Q.S.online = true; Q.S.err = ""; Q.S.t = Date.now(); Q.watch(); }
       catch (e) { Q.S.online = false; Q.S.err = String(e && e.message || e); }
       await Q.every("sys", 30000, async function () { Q.S.sys = await Q.api("/api/pro/system"); });
       try { var v = Q.views[Q.S.tab]; if (v && v.load) await v.load(); } catch (e) { Q.S.err = String(e && e.message || e); }
@@ -310,7 +405,7 @@
       var t = e.target && e.target.closest ? e.target : null;
       if (!t) return;
       var b = t.closest("[data-tab]");
-      if (b) { Q.go(b.getAttribute("data-tab")); return; }
+      if (b) { Q.haptic(8); Q.go(b.getAttribute("data-tab")); return; }
       b = t.closest("[data-go]");
       if (b) { Q.go(b.getAttribute("data-go")); return; }
       b = t.closest("[data-act]");
