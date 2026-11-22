@@ -80,6 +80,27 @@ class StaticChecks(unittest.TestCase):
         # small filter chips stay compact visually but get an invisible 44px hit area
         self.assertRegex(css, r"\.chip::after[^{]*\{[^}]*inset:-4px")
 
+    def test_motion_layer_is_complete_and_respects_reduced_motion(self):
+        css = read(os.path.join(ROOT, "pro.css"))
+        for name in ("rise", "scan", "ping", "pingw", "ecg", "flashup", "flashdn", "arc", "ringin", "glow", "pop", "drift"):
+            self.assertRegex(css, r"@keyframes " + name + r"\b", name)
+        self.assertRegex(css, r"\.vin>\*\{animation:rise [^}]*both\}")                       # sections rise one after another
+        self.assertRegex(css, r"\.vin>\*:nth-child\(14\)\{animation-delay:\d+ms\}")
+        self.assertRegex(css, r"(?m)^body\{background:transparent;")                           # else the background glow would be hidden
+        self.assertRegex(css, r"body::before\{[^}]*z-index:-1[^}]*pointer-events:none")
+        self.assertRegex(css, r"@media \(prefers-reduced-motion:reduce\)\{\*\{animation:none!important;transition:none!important\}\}")
+        self.assertIn('id="pulse"', read(os.path.join(ROOT, "pro.html")))
+        self.assertRegex(css, r'#pulse\[data-s="bad"\]::after')
+
+    def test_javascript_motion_honours_reduced_motion_and_uses_one_timer(self):
+        core, charts = read(os.path.join(ROOT, "pro_core.js")), read(os.path.join(ROOT, "pro_charts.js"))
+        self.assertIn("prefers-reduced-motion: reduce", core)
+        self.assertIn("Q.reduce()", core.split("Q.enhance = function", 1)[1].split("Q.greeting", 1)[0])
+        self.assertIn("Q.reduce ? Q.reduce()", charts)
+        self.assertEqual(charts.count("setInterval("), 1, "charts must share ONE live-pulse timer")
+        for fn in ("Q.cnt", "Q.enhance", "Q.watch", "Q.haptic", "Q.ecg"):
+            self.assertIn(fn + " = ", core)
+
     def test_profile_name_default_and_photo_stay_local(self):
         core = read(os.path.join(ROOT, "pro_core.js"))
         self.assertIn('"Fedi Tl"', core)
