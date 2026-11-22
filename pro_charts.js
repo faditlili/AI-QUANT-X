@@ -5,6 +5,33 @@
               grid: "rgba(255,255,255,.07)", tx: "rgba(255,255,255,.55)" };
   C.COL = COL;
 
+  /* ---------- motion: charts draw themselves once, the equity curve keeps a live pulse ---------- */
+  function reduced() { return Q.reduce ? Q.reduce() : false; }
+  function start(cv, animate) {                                // first draw of a canvas: reveal over ~0.8s, later draws are instant
+    if (animate && cv._p == null && !reduced() && typeof requestAnimationFrame === "function") {
+      var t0 = null;
+      cv._p = 0;
+      var step = function (ts) {
+        if (t0 == null) t0 = ts;
+        var x = Math.min(1, (ts - t0) / 800);
+        cv._p = 1 - Math.pow(1 - x, 3);
+        draw(cv);
+        if (x < 1 && cv.isConnected !== false) requestAnimationFrame(step); else cv._p = 1;
+      };
+      requestAnimationFrame(step);
+    } else if (cv._p == null) { cv._p = 1; }
+    draw(cv);
+  }
+  var liveSet = [];
+  if (typeof setInterval === "function") {                     // ONE timer for the whole app (not per chart)
+    setInterval(function () {
+      if (!liveSet.length || reduced() || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
+      var ph = (Date.now() % 1800) / 1800;
+      liveSet = liveSet.filter(function (cv) { return cv.isConnected !== false; });
+      liveSet.forEach(function (cv) { if (cv._p == null || cv._p >= 1) { cv._ph = ph; draw(cv); } });
+    }, 140);
+  }
+
   function setup(cv) {
     var dpr = Math.min(window.devicePixelRatio || 1, 3);
     var r = cv.getBoundingClientRect();
@@ -52,7 +79,7 @@
   C.area = function (cv, pts, opt) {
     if (!cv) return;
     cv._d = { k: "area", pts: pts || [], opt: opt || {} };
-    bind(cv); draw(cv);
+    bind(cv); start(cv, (pts || []).length > 1);
   };
   function drawArea(cv) {
     var s = setup(cv), g = s.g, w = s.w, h = s.h, d = cv._d, pts = d.pts, o = d.opt;
@@ -78,6 +105,8 @@
       g.fillStyle = up ? "rgba(214,255,31,.10)" : "rgba(255,107,107,.10)";
       g.fillRect(Math.max(0, X(kk) - 14), padT, 28, ph);
     }
+    var pp = cv._p == null ? 1 : cv._p;
+    g.save(); g.beginPath(); g.rect(0, 0, pw * pp + 1, h); g.clip();      // reveal left to right
     var grad = g.createLinearGradient(0, padT, 0, h);
     grad.addColorStop(0, up ? "rgba(214,255,31,.32)" : "rgba(255,107,107,.30)"); grad.addColorStop(1, "rgba(0,0,0,0)");
     g.beginPath(); g.moveTo(X(0), Y(pts[0].v));
@@ -86,9 +115,14 @@
     g.beginPath(); g.moveTo(X(0), Y(pts[0].v));
     for (i = 1; i < pts.length; i++) g.lineTo(X(i), Y(pts[i].v));
     g.strokeStyle = col; g.lineWidth = 2.2; g.lineJoin = "round"; g.stroke();
+    g.restore();
     var lx = X(pts.length - 1), ly = Y(pts[pts.length - 1].v);
-    g.fillStyle = "#000"; g.beginPath(); g.arc(lx, ly, 5, 0, 6.2832); g.fill();
-    g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath(); g.arc(lx, ly, 4, 0, 6.2832); g.stroke();
+    if (pp >= 1) {
+      if (!cv._lv) { cv._lv = true; liveSet.push(cv); }
+      if (cv._ph != null) { g.save(); g.globalAlpha = (1 - cv._ph) * 0.65; g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.arc(lx, ly, 5 + cv._ph * 12, 0, 6.2832); g.stroke(); g.restore(); }   // live pulse
+      g.fillStyle = "#000"; g.beginPath(); g.arc(lx, ly, 5, 0, 6.2832); g.fill();
+      g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath(); g.arc(lx, ly, 4, 0, 6.2832); g.stroke();
+    }
     if (cv._x != null) {
       var k = Math.max(0, Math.min(pts.length - 1, Math.round((cv._x / pw) * (pts.length - 1))));
       var px = X(k), py = Y(pts[k].v);
@@ -104,7 +138,7 @@
     if (!cv) return;
     cv._d = { k: "bars", items: items || [], opt: opt || {} };
     if (cv._sel == null || cv._sel >= cv._d.items.length) cv._sel = null;
-    bind(cv); draw(cv);
+    bind(cv); start(cv, cv._d.items.length > 0);
   };
   function barGeom(cv) {
     var d = cv._d, o = d.opt, w = cv.getBoundingClientRect().width, padL = 44, n = d.items.length || 1;
@@ -131,10 +165,10 @@
     if (o.ref != null) {
       g.setLineDash([4, 4]); g.strokeStyle = "rgba(255,255,255,.3)"; g.beginPath(); g.moveTo(padL, Y(o.ref)); g.lineTo(w, Y(o.ref)); g.stroke(); g.setLineDash([]);
     }
-    var bw = Math.max(8, Math.min(34, slot * 0.62));
+    var bw = Math.max(8, Math.min(34, slot * 0.62)), pp = cv._p == null ? 1 : cv._p;       // pp: bars grow from the baseline on the first draw
     for (i = 0; i < n; i++) {
-      var it = items[i], cx = padL + i * slot + slot / 2, top = Y(Math.max(it.v, 0)), bot = Y(Math.min(it.v, 0));
-      var bh = Math.max(bw, bot - top);                        // pill bars never shrink below their own width
+      var it = items[i], cx = padL + i * slot + slot / 2, top = Y(Math.max(it.v, 0) * pp), bot = Y(Math.min(it.v, 0) * pp);
+      var bh = Math.max(bw * pp, bot - top);                        // pill bars never shrink below their own width
       var y = it.v >= 0 ? y0 - bh : y0, x = cx - bw / 2;
       if (it.v === 0) { y = y0 - bh; }
       if (i === sel) {
@@ -152,15 +186,15 @@
       var lb = String(it.label == null ? "" : it.label);
       g.fillText(lb, cx - g.measureText(lb).width / 2, h - 5);
     }
-    var si = items[sel], sx = padL + sel * slot + slot / 2, sy = si.v >= 0 ? Y(si.v) : Y(0) - 4;
-    tip(g, w, o.fmt ? o.fmt(si.v) : Q.n(si.v, 2), sx, Math.max(2, Math.min(sy - 30, h - padB - 24)));
+    var si = items[sel], sx = padL + sel * slot + slot / 2, sy = si.v >= 0 ? Y(si.v * pp) : Y(0) - 4;
+    if (pp > 0.6) tip(g, w, o.fmt ? o.fmt(si.v) : Q.n(si.v, 2), sx, Math.max(2, Math.min(sy - 30, h - padB - 24)));
   }
 
   /* ---------- candles ---------- */
   C.candles = function (cv, candles, lines, opt) {
     if (!cv) return;
     cv._d = { k: "candles", c: candles || [], lines: lines || [], opt: opt || {} };
-    bind(cv); draw(cv);
+    bind(cv); start(cv, (candles || []).length >= 3);
   };
   function drawCandles(cv) {
     var s = setup(cv), g = s.g, w = s.w, h = s.h, d = cv._d, all = d.c, lines = d.lines;
@@ -182,6 +216,8 @@
       var gy = padT + (ph * i) / 4; g.beginPath(); g.moveTo(0, gy); g.lineTo(pw, gy); g.stroke();
       g.fillText(Q.price(mx - (span * i) / 4), pw + 4, gy + 3);
     }
+    var pp = cv._p == null ? 1 : cv._p;
+    g.save(); g.beginPath(); g.rect(0, 0, pw * pp + 1, h); g.clip();         // candles appear left to right
     for (i = 0; i < c.length; i++) {
       var k = c[i], x = i * cw + cw / 2, col = k.close >= k.open ? COL.lime : COL.dn;
       g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1;
@@ -189,6 +225,7 @@
       var top = Y(Math.max(k.open, k.close)), bh = Math.max(1, Math.abs(Y(k.open) - Y(k.close)));
       g.fillRect(x - Math.max(1, cw * 0.36), top, Math.max(2, cw * 0.72), bh);
     }
+    g.restore();
     for (i = 0; i < lines.length; i++) {
       var L = lines[i], ly = Y(L.price);
       if (ly < padT - 2 || ly > h - padB + 2) continue;
