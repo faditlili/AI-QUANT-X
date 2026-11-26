@@ -280,7 +280,14 @@
       "g_morning": "Good morning",
       "g_afternoon": "Good afternoon",
       "g_evening": "Good evening",
-      "g_night": "Good night"
+      "g_night": "Good night",
+      "session": "Session",
+      "logout": "Sign out of this device",
+      "logout_x": "Sign out here, or end every signed-in session at once.",
+      "logout_all": "End all sessions",
+      "logout_all_x": "Use this if a device or link with access may have been lost or shared.",
+      "logout_q": "Sign out of this device?",
+      "logout_all_q": "This signs every device out, including this one. Continue?"
     },
     ar: {
       "nav_overview": "الرئيسية",
@@ -561,7 +568,14 @@
       "g_morning": "صباح الخير",
       "g_afternoon": "طاب نهارك",
       "g_evening": "مساء الخير",
-      "g_night": "ليلة سعيدة"
+      "g_night": "ليلة سعيدة",
+      "session": "الجلسة",
+      "logout": "تسجيل الخروج من هذا الجهاز",
+      "logout_x": "سجّل خروجك من هذا الجهاز، أو أنهِ كل الجلسات المسجّلة دفعة واحدة.",
+      "logout_all": "إنهاء كل الجلسات",
+      "logout_all_x": "استخدم هذا إذا شككت أن جهازاً أو رابط دخول قد ضاع أو شورك.",
+      "logout_q": "هل تريد تسجيل الخروج من هذا الجهاز؟",
+      "logout_all_q": "هذا سيسجّل خروج كل الأجهزة، بما فيها هذا الجهاز. متابعة؟"
     }
   };
   (window.__mods = window.__mods || []).push("i18n");
