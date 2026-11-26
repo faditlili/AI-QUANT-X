@@ -131,6 +131,8 @@
         if (!b) return;
         var a = b.getAttribute("data-act");
         if (a === "lang-set") Q.setLang(b.getAttribute("data-v"));
+        if (a === "logout") Q.confirmLogout(false);
+        if (a === "logout-all") Q.confirmLogout(true);
       };
     },
     update: function () {
@@ -142,7 +144,11 @@
         '<div class="sec">' + Q.head("cpu", Q.t("engine"), null) + '<div class="card"><div class="h"><span class="sc ' + (st.paused ? "off" : "on") + '"><i class="dot"></i>' + (st.paused ? Q.t("paused") : Q.t("running")) + '</span></div><div class="mu" style="font-size:12.5px">' + Q.esc(Q.t("pause_x")) +
         '</div><button class="btn blk" data-act="pause">' + Q.icon(st.paused ? "play" : "pause") + (st.paused ? Q.t("resume") : Q.t("pause")) + "</button></div></div>" +
         '<div class="sec">' + Q.head("shield", Q.t("risk_cfg"), "tools") + '<div class="card">' + (rk ? '<div class="kv" style="margin-top:0">' + kv(Q.t("per_trade"), rk.per_trade + "%") + kv(Q.t("portfolio"), rk.portfolio + "%") + kv(Q.t("daily_limit"), rk.daily_limit + "%") + kv(Q.t("max_dd"), rk.max_drawdown + "%") + kv(Q.t("max_pos"), rk.max_positions) + "</div>" : '<div class="sk"></div>') +
-        '<div class="mu" style="font-size:11.5px;margin-top:10px">' + Q.esc(Q.t("risk_ro")) + "</div></div></div>");
+        '<div class="mu" style="font-size:11.5px;margin-top:10px">' + Q.esc(Q.t("risk_ro")) + "</div></div></div>" +
+        '<div class="sec">' + Q.head("shield", Q.t("session"), null) + '<div class="card"><div class="mu" style="font-size:12.5px">' + Q.esc(Q.t("logout_x")) + '</div>' +
+        '<button class="btn blk" data-act="logout">' + Q.t("logout") + '</button>' +
+        '<button class="btn dng blk" data-act="logout-all">' + Q.t("logout_all") + '</button>' +
+        '<div class="mu" style="font-size:11px;margin-top:8px">' + Q.esc(Q.t("logout_all_x")) + "</div></div></div>");
     }
   };
   (window.__mods = window.__mods || []).push("more");
