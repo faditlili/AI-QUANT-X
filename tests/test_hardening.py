@@ -160,8 +160,6 @@ class Dependencies(unittest.TestCase):
             self.assertGreaterEqual(found[name], floor, name)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TickPlausibility(unittest.TestCase):
@@ -202,3 +200,55 @@ class TickPlausibility(unittest.TestCase):
         import time
         self.W.live_prices["BTCUSDT"] = (100.0, time.monotonic() - 3600)
         self.assertEqual(self.feed(350.0), 350.0)                 # after a long outage the market may differ a lot
+
+
+class SessionRevocation(unittest.TestCase):
+    """A leaked session cookie used to be valid FOREVER (the token never changed). These tests simulate the
+    attack and prove that bumping the epoch kills every outstanding cookie while the access key still works."""
+
+    def setUp(self):
+        security._fails.clear()
+
+    def test_leaked_cookie_works_until_the_epoch_is_bumped(self):
+        key = "my-secret-key"
+        stolen = security.session_token(key, epoch="e1")             # e.g. copied from a server log
+        self.assertEqual(security.authorize(key, "", stolen, "10.0.0.1", epoch="e1"), "ok")
+        self.assertEqual(security.authorize(key, "", stolen, "10.0.0.1", epoch="e2"), "denied")   # bumped: dead immediately
+
+    def test_bumping_the_epoch_does_not_touch_the_access_key(self):
+        key = "my-secret-key"
+        self.assertEqual(security.authorize(key, key, "", "1.1.1.1", epoch="new-epoch"), "ok")
+
+    def test_a_fresh_login_after_the_bump_issues_a_cookie_that_works(self):
+        key = "my-secret-key"
+        fresh = security.session_token(key, epoch="e9")
+        self.assertEqual(security.authorize(key, "", fresh, "1.1.1.1", epoch="e9"), "ok")
+
+    def test_old_cookies_before_this_feature_existed_still_work_with_the_default_empty_epoch(self):
+        key = "my-secret-key"
+        legacy = security.session_token(key)                         # no epoch argument, as older code produced
+        self.assertEqual(security.authorize(key, "", legacy, "1.1.1.1"), "ok")              # epoch="" default: unaffected
+
+    def test_tokens_differ_per_epoch_so_an_attacker_cannot_predict_the_next_one(self):
+        key = "my-secret-key"
+        self.assertNotEqual(security.session_token(key, "a"), security.session_token(key, "b"))
+
+    def test_logout_routes_exist_and_are_wired_to_the_epoch(self):
+        main = read("main.py")
+        self.assertIn('@app.post("/api/logout")', main)
+        self.assertIn('@app.post("/api/logout_all")', main)
+        self.assertIn("db.set_state(\"session_epoch\"", main)
+        self.assertIn('delete_cookie("dash_key")', main)
+        self.assertIn("epoch=epoch", main)                           # the guard itself must pass the epoch to authorize()
+        self.assertIn("session_token(config.DASHBOARD_KEY, _epoch(request))", main)
+
+    def test_ui_exposes_a_real_logout_and_a_kill_all_sessions_action(self):
+        core, more = read("pro_core.js"), read("pro_more.js")
+        self.assertIn("Q.confirmLogout", core)
+        self.assertIn('f.action = all ? "/api/logout_all" : "/api/logout"', core)
+        self.assertIn('data-act="logout-all"', more)
+        self.assertIn('data-act="logout"', more)
+
+
+if __name__ == "__main__":
+    unittest.main()
