@@ -1,4 +1,4 @@
-import logging, sys
+import logging, sys, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -62,6 +62,13 @@ async def login_page():
     return LOGIN_HTML
 
 # --- مسار معالجة تسجيل الدخول ---
+def _epoch(request: Request):
+    """The current session epoch, persisted in the database so a bump survives restarts and applies to every
+    worker. Empty until the first bump: old cookies (issued before this feature existed) keep working then."""
+    db = getattr(request.app.state, "db", None)
+    return db.get_state("session_epoch", "") if db else ""
+
+
 @app.post("/api/login")
 async def api_login(request: Request, password: str = Form(...)):
     if not config.DASHBOARD_KEY:
@@ -74,7 +81,7 @@ async def api_login(request: Request, password: str = Form(...)):
     if security.check_credentials(config.DASHBOARD_KEY, supplied_key=str(password)):
         security.clear_failures(ip)
         response = RedirectResponse("/", status_code=303)
-        response.set_cookie("dash_key", security.session_token(config.DASHBOARD_KEY), httponly=True, samesite="lax",
+        response.set_cookie("dash_key", security.session_token(config.DASHBOARD_KEY, _epoch(request)), httponly=True, samesite="lax",
                             max_age=30*86400, secure=_is_https(request))
         return response
 
@@ -87,10 +94,32 @@ async def api_login(request: Request, password: str = Form(...)):
     """, status_code=401)
 
 # --- الحارس (Middleware) ---
+@app.post("/api/logout")
+async def api_logout(request: Request):
+    """Clears this browser's cookie. Does not by itself invalidate cookies copied elsewhere; use /api/logout_all
+    for that (bumps the epoch, so EVERY session, including this one, must sign in again)."""
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie("dash_key")
+    return response
+
+
+@app.post("/api/logout_all")
+async def api_logout_all(request: Request):
+    """Revoke every issued session cookie at once: for a leaked cookie you cannot otherwise identify or rotate
+    individually (a shared device, a log line, an old backup). The access key itself is unaffected."""
+    db = getattr(request.app.state, "db", None)
+    if db:
+        db.set_state("session_epoch", security.session_token(config.DASHBOARD_KEY or "logout", str(time.time())))
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie("dash_key")
+    return response
+
+
 @app.middleware("http")
 async def dashboard_key_guard(request: Request, call_next):
     key=config.DASHBOARD_KEY
     path=request.url.path
+    epoch=_epoch(request)
 
     if not key and request.method not in ("GET", "HEAD", "OPTIONS") and path != "/api/login" \
             and not config.ALLOW_INSECURE_DASHBOARD:
@@ -101,7 +130,7 @@ async def dashboard_key_guard(request: Request, call_next):
     if key and path not in ("/health", "/login", "/api/login"):
         supplied=request.query_params.get("key") or ""
         token=request.cookies.get("dash_key") or ""
-        verdict=security.authorize(key, supplied, token, _client_ip(request))
+        verdict=security.authorize(key, supplied, token, _client_ip(request), epoch=epoch)
         if verdict=="locked":
             return JSONResponse({"detail":"too many attempts"},status_code=429)
         if verdict!="ok":
@@ -110,7 +139,7 @@ async def dashboard_key_guard(request: Request, call_next):
             return RedirectResponse(url="/login")
         response=await call_next(request)
         if supplied and security.check_credentials(key, supplied_key=supplied):
-            response.set_cookie("dash_key",security.session_token(key),httponly=True,samesite="lax",
+            response.set_cookie("dash_key",security.session_token(key,epoch),httponly=True,samesite="lax",
                                 max_age=30*86400,secure=_is_https(request))
     else:
         response=await call_next(request)
