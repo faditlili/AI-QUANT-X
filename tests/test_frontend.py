@@ -34,8 +34,8 @@ class StaticChecks(unittest.TestCase):
             self.assertIn('"%s"' % name, html.split("var need")[1].split("]")[0], name)
 
     def test_front_end_only_calls_endpoints_that_exist(self):
-        routes = read(os.path.join(ROOT, "ui.py")) + read(os.path.join(ROOT, "dashboard.py"))
-        defined = set(re.findall(r'@router\.(?:get|post)\("([^"{]+)', routes))
+        routes = read(os.path.join(ROOT, "ui.py")) + read(os.path.join(ROOT, "dashboard.py")) + read(os.path.join(ROOT, "main.py"))
+        defined = set(re.findall(r'@(?:router|app)\.(?:get|post)\("([^"{]+)', routes))
         called = set()
         for path in FRONT:
             if path.endswith(".js"):
