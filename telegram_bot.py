@@ -41,6 +41,7 @@ class TelegramNotifier:
             self.app.add_handler(CommandHandler("daily", self.cmd_daily))
             self.app.add_handler(CommandHandler("stats", self.cmd_stats))
             self.app.add_handler(CommandHandler("pairs", self.cmd_pairs))
+            self.app.add_handler(CommandHandler("tiers", self.cmd_tiers))
             self.app.add_handler(CommandHandler("count", self.cmd_count))
             self.app.add_handler(CommandHandler("forceexit", self.cmd_forceexit))
             self.app.add_handler(CommandHandler("help", self.cmd_help))
@@ -173,7 +174,7 @@ class TelegramNotifier:
         if not await self._guard(update): return
         await update.effective_message.reply_text(_b(
             "الأوامر المتاحة:\n\n"
-            "/status - حالة البوت\n/balance - الرصيد\n/positions - الصفقات المفتوحة (مع أرقامها)\n"
+            "/status - حالة البوت\n/balance - الرصيد\n/positions - الصفقات المفتوحة (مع أرقامها)\n/tiers - الأداء حسب فئة سعر العملة\n"
             "/count - عدد الصفقات المفتوحة\n/profit - الربح الكلي والمقاييس\n/daily [أيام] - الأداء اليومي\n"
             "/stats - إحصاءات حسب سبب الخروج والاستراتيجية\n/pairs - الأداء حسب العملة\n"
             "/history - آخر 10 صفقات مغلقة\n/performance - ملخص سريع\n/risk - حالة المخاطرة\n"
@@ -262,6 +263,36 @@ class TelegramNotifier:
         if worst:
             text += "\n\n⬇️ الأضعف:\n" + "\n".join(row(*r) for r in worst)
         await update.effective_message.reply_text(_b(text))
+
+
+    async def cmd_tiers(self, update, context):
+        """Performance grouped by the coin's price at entry. Price level itself has no bearing on % P&L (position
+        size already adapts to it); this groups by entry_price only to let the real numbers answer the question
+        instead of an impression from a handful of trades. A cheap/meme coin still gets the modelled 5bps slippage
+        like a major one, so any edge shown here may be more optimistic than real execution on illiquid coins."""
+        if not await self._guard(update): return
+        closed = self._closed_trades()
+        if not closed:
+            await update.effective_message.reply_text(_b("لا توجد صفقات مغلقة بعد.")); return
+        tiers = [("< 0.01$", 0, 0.01), ("0.01$ - 1$", 0.01, 1), ("1$ - 100$", 1, 100), ("> 100$", 100, float("inf"))]
+        groups = {label: [] for label, _, _ in tiers}
+        for t in closed:
+            price = float(t["entry_price"] or 0)
+            for label, low, high in tiers:
+                if low <= price < high:
+                    groups[label].append(float(t["net_pnl"] or 0))
+                    break
+        lines = []
+        for label, _, _ in tiers:
+            pnls = groups[label]
+            if not pnls:
+                lines.append(f"⚪ {label}: لا صفقات")
+                continue
+            s = self._summary(pnls)
+            lines.append(f"{'🟢' if s['net'] > 0 else '🔴'} {label}: {s['net']:+.2f} USDT ({s['n']} صفقة، نجاح {s['wr']:.0f}%، متوسط {s['exp']:+.2f})")
+        await update.effective_message.reply_text(_b(
+            "💲 الأداء حسب فئة سعر العملة (عند الدخول)\n\n" + "\n".join(lines) +
+            "\n\n⚠️ الانزلاق المحاكى ثابت لكل العملات، فقد يكون التنفيذ الحقيقي على العملات الضعيفة السيولة أسوأ مما تُظهره هذه الأرقام."))
 
     async def cmd_count(self, update, context):
         if not await self._guard(update): return
