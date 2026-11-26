@@ -66,14 +66,38 @@ class Handlers(unittest.TestCase):
         self.bot = T.TelegramNotifier(self.db, self.eng)
         self.bot.engine = self.eng
 
-    def trade(self, symbol, exit_price):
-        pid = open_pos(self.eng.trader, symbol, 100.0, 1.0)["position"]["id"]
+    def trade(self, symbol, exit_price, entry=100.0):
+        pid = open_pos(self.eng.trader, symbol, entry, max(entry * 0.01, 1e-6))["position"]["id"]
         self.eng.trader.close_position(pid, exit_price, "MANUAL")
 
     def ask(self, name):
         up = FakeUpdate(self.ADMIN)
         run(getattr(self.bot, name)(up, Ctx([])))
         return up.effective_message.sent[0]
+
+    def test_tiers_groups_trades_by_entry_price_correctly(self):
+        self.trade("MICROUSDT", 0.0011, entry=0.001)      # < 0.01$ tier, winner
+        self.trade("CENTUSDT", 0.45, entry=0.5)            # 0.01$-1$ tier, loser
+        self.trade("MIDUSDT", 106.0, entry=100.0)          # 1$-100$... wait boundary
+        self.trade("MAJORUSDT", 68000.0, entry=65000.0)    # > 100$ tier, winner
+        text = plain(self.ask("cmd_tiers"))
+        self.assertIn("< 0.01$", text)
+        self.assertIn("0.01$ - 1$", text)
+        self.assertIn("> 100$", text)
+        self.assertIn("4 صفقة".replace("4", "1"), text)    # each populated tier has exactly 1 trade below
+        self.assertIn("⚠️", text)                           # the slippage-model caveat must always show
+
+    def test_tiers_handles_no_trades_and_sums_match_totals(self):
+        text = plain(self.ask("cmd_tiers"))
+        self.assertIn("لا توجد صفقات مغلقة بعد", text)
+        self.trade("AUSDT", 101.0, entry=100.0)    # entry price boundary: 100 falls in "> 100$" (low <= price)
+        self.trade("BUSDT", 0.0002, entry=0.0001)  # "< 0.01$" tier
+        self.trade("CUSDT", 50.0, entry=50.0)      # "1$ - 100$" tier
+        text = plain(self.ask("cmd_tiers"))
+        amounts = [float(m) for m in re.findall(r"([+-]\d+\.\d\d) USDT", text)]
+        expected = [float(t["net_pnl"]) for t in self.db.get_closed_trades(50)]
+        self.assertAlmostEqual(sum(amounts), sum(expected), delta=0.02)   # rounding of 2 displayed figures
+        self.assertEqual(len(amounts), 3, "all three populated tiers must each report their own net once")
 
     def test_pairs_shows_the_losing_pairs_not_just_the_winners(self):
         for i in range(12):
