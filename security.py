@@ -7,18 +7,24 @@ LOCK_SECONDS = 300
 _fails = {}
 
 
-def session_token(key):
-    """Cookie value derived from the key. The cookie never contains the key itself."""
-    return hmac.new(key.encode(), b"aiqx-dashboard-session-v1", hashlib.sha256).hexdigest()
+def session_token(key, epoch=""):
+    """Cookie value derived from the key AND a revocable epoch. The cookie never contains the key itself.
+
+    Without the epoch, the token for a given key never changes, so a leaked cookie (from a log, a shared
+    device, a backup) would grant access forever: the only way to kill it would be rotating the whole
+    DASHBOARD_KEY, which also logs out the legitimate owner. Bumping the epoch (session_epoch_bump) revokes
+    every issued cookie in one step while the key, and every other session started after the bump, stays valid.
+    """
+    return hmac.new(key.encode(), ("aiqx-dashboard-session-v1:" + str(epoch)).encode(), hashlib.sha256).hexdigest()
 
 
-def check_credentials(key, supplied_key="", supplied_token=""):
-    """True if the plain key (query string / login form) or the session token (cookie) is valid."""
+def check_credentials(key, supplied_key="", supplied_token="", epoch=""):
+    """True if the plain key (query string / login form) or the session token (cookie, for this epoch) is valid."""
     if not key:
         return True
     if supplied_key and hmac.compare_digest(supplied_key.encode(), key.encode()):
         return True
-    if supplied_token and hmac.compare_digest(supplied_token.encode(), session_token(key).encode()):
+    if supplied_token and hmac.compare_digest(supplied_token.encode(), session_token(key, epoch).encode()):
         return True
     return False
 
@@ -64,15 +70,16 @@ def clear_failures(ip):
     _fails.pop(ip, None)
 
 
-def authorize(key, supplied_key="", supplied_token="", ip="unknown", now=None):
+def authorize(key, supplied_key="", supplied_token="", ip="unknown", now=None, epoch=""):
     """Decide a request: "ok" | "locked" | "denied".
 
     A VALID session cookie is never blocked by a lockout: the lockout exists to stop key guessing, and letting
-    it also reject the legitimate owner would let anyone behind the same proxy hop lock them out.
+    it also reject the legitimate owner would let anyone behind the same proxy hop lock them out. A cookie from
+    a revoked (bumped) epoch is simply not valid, so it falls through to the key check like any wrong cookie.
     """
     if not key:
         return "ok"
-    if supplied_token and check_credentials(key, supplied_token=supplied_token):
+    if supplied_token and check_credentials(key, supplied_token=supplied_token, epoch=epoch):
         return "ok"
     if is_locked(ip, now):
         return "locked"
