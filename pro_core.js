@@ -129,6 +129,15 @@
       })(n, from, to);
     }
   };
+  Q.confirmLogout = function (all) {
+    Q.sheet(Q.t(all ? "logout_all" : "logout"), Q.t(all ? "logout_all_q" : "logout_q"),
+      [{ label: Q.t("cancel") }, { label: Q.t(all ? "logout_all" : "logout"), kind: "dng", fn: function () {
+        var f = document.createElement("form");
+        f.method = "POST"; f.action = all ? "/api/logout_all" : "/api/logout";
+        document.body.appendChild(f); f.submit();
+      } }]);
+  };
+
   Q.greeting = function () {
     var h = new Date().getHours();
     return Q.t(h >= 5 && h < 12 ? "g_morning" : h >= 12 && h < 17 ? "g_afternoon" : h >= 17 && h < 22 ? "g_evening" : "g_night");
